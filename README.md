@@ -30,15 +30,11 @@ docker-compose up --build
 
 This will start both the FastAPI server and Elasticsearch.
 
-### 4. Upload sample songs (optional)
-
-After the services are up:
+If the app has already been built and you just want to start it again, use:
 
 ```bash
-docker exec -it melodymind_api python app/upload_music_data.py
+docker-compose up
 ```
-
-This adds two sample songs to Elasticsearch for testing.
 
 ## How to Test
 
