@@ -1,0 +1,14 @@
+name: melodymind
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.9
+  - pip
+  - fastapi
+  - uvicorn
+  - python-dotenv
+  - elasticsearch
+  - openai
+  - pydantic
+  - requests

@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  fastapi:
+    build: .
+    container_name: melodymind_api
+    ports:
+      - "5051:5051"
+    env_file:
+      - .env
+    depends_on:
+      - elasticsearch
+    command: ["/wait-for-elasticsearch.sh", "http://elasticsearch:9200", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "5051"]
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: melodymind_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m" # Limit memory usage
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  data-loader:
+    build: .
+    env_file:
+      - .env
+    depends_on:
+      - elasticsearch
+    command: ["/wait-for-elasticsearch.sh", "http://elasticsearch:9200", "python", "-m", "app.upload_music_data"]
+
+volumes:
+  esdata:
