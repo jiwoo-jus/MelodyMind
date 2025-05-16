@@ -2,7 +2,7 @@
 
 A context-aware music recommendation API using FastAPI, OpenAI, and Elasticsearch.
 
-## Quick Start (Docker)
+## Quick Start
 
 ### 1. Clone the repository
 
@@ -13,14 +13,19 @@ cd melodymind
 
 ### 2. Set up environment variables
 
-Create a `.env` file in the project root directory. I (Jiwoo) will provide the content.
+1. Create a `.env` file in the project root directory.
+   *(I'll provide the content separately.)*
 
-Use the `environment.yml` file to create the Conda environment:
+2. Before creating the environment, make sure **Conda** is installed on your system.
+   If not, you can download it from the official site:
+   [https://docs.conda.io/en/latest/miniconda.html](https://docs.conda.io/en/latest/miniconda.html)
 
-```bash
-conda env create -f environment.yml
-conda activate melodymind
-```
+3. Create and activate the Conda environment:
+
+   ```bash
+   conda env create -f environment.yml
+   conda activate melodymind
+   ```
 
 ### 3. Start the app
 
