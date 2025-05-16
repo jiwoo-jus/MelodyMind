@@ -7,7 +7,7 @@ A context-aware music recommendation API using FastAPI, OpenAI, and Elasticsearc
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-team/melodymind.git
+git clone https://github.com/jiwoo-jus/melodymind.git
 cd melodymind
 ````
 
