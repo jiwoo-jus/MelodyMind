@@ -9,8 +9,8 @@ A context-aware music recommendation API using FastAPI, OpenAI, and Elasticsearc
 ### 1. **Clone the Repository**
 
 ```bash
-git clone https://github.com/your-team/melodymind.git
-cd melodymind
+git clone -b Jiwoo https://github.com/jiwoo-jus/MelodyMind
+cd MelodyMind 
 ```
 
 ---
@@ -42,14 +42,24 @@ This will:
 2. Run the following command to load the data into Elasticsearch:
 
    ```bash
-   python scripts/load_songs.py
+   python scripts/update_songs.py
    ```
 
    This script will:
    - Connect to Elasticsearch at `http://localhost:9200`.
    - Load the songs_data.json file into the `songs` index.
 
-3. Verify the data has been loaded by running:
+#### Restart/Rebuild Services After Index Update
+
+    ```
+    docker-compose restart api
+
+    docker-compose down
+
+    docker-compose up --build
+    ```
+
+1. Verify the data has been loaded by running:
 
    ```bash
    curl -X GET "http://localhost:9200/songs/_count"
@@ -57,7 +67,7 @@ This will:
 
    This will return the total number of documents in the `songs` index.
 
-4. To view the fields and their data types in the songs index:
+2. To view the fields and their data types in the songs index:
 
     ```bash
     curl -X GET "http://localhost:9200/songs/_mapping?pretty"

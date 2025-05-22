@@ -159,6 +159,7 @@ def bulk_load(es: Elasticsearch, df: pd.DataFrame):
                 "valence": r.valence,
                 "tempo": r.tempo,
                 "embedding": r.embedding,
+                "lyrics": r.lyrics,
             }
         }
         for r in df.itertuples()
