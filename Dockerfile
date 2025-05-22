@@ -1,9 +1,18 @@
 FROM python:3.10-slim
 
+# Set the working directory
 WORKDIR /app
 
-COPY app/ ./app/
-COPY .env .env
+# Set PYTHONPATH so Python can find the modules
+ENV PYTHONPATH "${PYTHONPATH}:/app"
+
+# Copy application code (local app/ directory to container's /app/ directory)
+COPY app/ .
+
+# Copy the .env file
+COPY .env .
+
+# Copy the wait-for-elasticsearch script
 COPY wait-for-elasticsearch.sh /wait-for-elasticsearch.sh
 
 # Make the script executable
@@ -15,5 +24,5 @@ RUN apt-get update && apt-get install -y build-essential curl && rm -rf /var/lib
 # Install Python dependencies
 RUN pip install --no-cache-dir fastapi uvicorn openai "elasticsearch>=8.0.0,<9.0.0" python-dotenv
 
-# We'll use the script in docker-compose, the CMD here will be overridden
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "5051"]
+# The CMD here will be overridden by docker-compose
+# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5051"]

@@ -42,3 +42,6 @@ htmlcov/
 
 # Project-specific
 TEMP/
+*TEMP*
+*.tmp
+*copy*
