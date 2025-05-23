@@ -1,4 +1,7 @@
-from functools import lru_cache
+# file that defines the search(prompt, size) function, which
+# is used in main.py as the function hybrid_search().
+
+from functools import lru_cache  # memorizes expensive embedding calls
 from typing import List
 import os, json
 
@@ -11,7 +14,7 @@ EMB_MODEL = "text-embedding-3-small"  # 1536-dimensional embedding
 CLIENT = OpenAI()
 
 # Generate 1536-dimensional embedding (cached)
-@lru_cache(maxsize=256)
+@lru_cache(maxsize=256)  # saves API calls
 def embed(text: str) -> List[float]:
     return CLIENT.embeddings.create(model=EMB_MODEL, input=text).data[0].embedding
 

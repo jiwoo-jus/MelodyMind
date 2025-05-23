@@ -3,22 +3,23 @@ import os
 import time
 from typing import List, Optional
 
-import uvicorn
-from dotenv import load_dotenv
+import uvicorn  # runs FastAPI app
+from dotenv import load_dotenv  # loads .env file
 from elasticsearch import Elasticsearch, ConnectionError as ESConnectionError
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-
+# function from services/search.py that handles searching based on the prompt
 from services.search import search as hybrid_search
 # ──────────────────────────────────────────── env & clients
-load_dotenv()
+load_dotenv()  # loads variables from .env file
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 ES_HOST = os.getenv("ELASTICSEARCH_HOST")
 ES_INDEX = os.getenv("ELASTICSEARCH_INDEX", "songs")  # Default value retained
 
+# tries to connect to elasticsearch; retries 5x with 5 sec between attempts
 def init_es(host: str, retries: int = 5, wait: int = 5) -> Optional[Elasticsearch]:
     """Initialize Elasticsearch connection with retries."""
     for attempt in range(retries):
@@ -33,7 +34,7 @@ def init_es(host: str, retries: int = 5, wait: int = 5) -> Optional[Elasticsearc
         time.sleep(wait)
     print("[ES] Failed to connect to Elasticsearch; health ping will be unavailable.")
     return None
-
+# connection is stored in es_client
 es_client: Optional[Elasticsearch] = init_es(ES_HOST)
 
 # ──────────────────────────────────────────── FastAPI app
@@ -42,9 +43,9 @@ app = FastAPI(
     description="Hybrid vector/BM25 music search powered by OpenAI + Elasticsearch.",
     version="2.0.0",
 )
-
+# reads list of allowed origins from .env
 origins = os.getenv("CORS_ORIGINS", "").split(",")
-
+# enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -56,9 +57,9 @@ app.add_middleware(
 # ──────────────────────────────────────────── pydantic models
 class SearchRequest(BaseModel):
     prompt: str
-    size: int = 20
+    size: int = 20  # number of results
 
-class SongResult(BaseModel):
+class SongResult(BaseModel):  # structure of response
     title: str
     artist: str
     score: float
@@ -69,17 +70,19 @@ class SongResult(BaseModel):
     release_date: Optional[str] = None
 
 # ──────────────────────────────────────────── endpoints
-@app.get("/", summary="Health check")
+@app.get("/", summary="Health check") 
 def health():
     return {
         "status": "ok",
         "elasticsearch_connected": es_client.ping() if es_client else False,
         "openai_key_loaded": bool(OPENAI_API_KEY),
     }
-
+# what the frontend talks to when the user submits a prompt
 @app.post("/search", response_model=List[SongResult], summary="Hybrid search")
 def api_search(req: SearchRequest):
     try:
+        # function 'hybrid_search' sends user prompt to OpenAI to get
+        # the top 20 song documents based on similarity
         hits = hybrid_search(req.prompt, req.size)
     except Exception as e:
         print(f"Unhandled exception in hybrid_search: {type(e).__name__} - {e}")
@@ -87,7 +90,8 @@ def api_search(req: SearchRequest):
 
     results: List[SongResult] = []
     for h in hits:
-        source = h.get("_source", {})
+        # creates dictionary of a song's metadata
+        source = h.get("_source", {})  
 
         results.append(
             SongResult(
