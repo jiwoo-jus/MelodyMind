@@ -9,7 +9,7 @@ import tiktoken
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv(dotenv_path="/Users/jiwoo/WorkSpace/MelodyMind/.env")
+load_dotenv(dotenv_path="/Users/cassie/code/capstone/melodymind/.env")
 
 # Check if API key is loaded
 api_key = os.getenv("OPENAI_API_KEY")

@@ -7,7 +7,7 @@ import math
 es = Elasticsearch("http://localhost:9200")
 
 # Load the JSON file
-with open("songs_data.json", "r") as f:
+with open("/Users/cassie/code/capstone/melodymind/data/musicoset/songs_data.json", "r") as f:
     songs_raw = json.load(f)
 
 # NaN -> None
@@ -30,7 +30,7 @@ print(f"Loaded and cleaned {len(songs)} songs from songs_data.json")
 
 
 # Load lyrics
-lyrics_df = pd.read_csv("/Users/jiwoo/WorkSpace/MelodyMind/data/musicoset/lyrics.csv", sep="\t")
+lyrics_df = pd.read_csv("/Users/cassie/code/capstone/melodymind/data/musicoset/lyrics.csv", sep="\t")
 lyrics_df.columns = lyrics_df.columns.str.strip()
 lyrics_dict = dict(zip(lyrics_df.song_id, lyrics_df.lyrics))
 

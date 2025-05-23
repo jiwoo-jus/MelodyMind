@@ -52,7 +52,7 @@ This will:
 #### Restart/Rebuild Services After Index Update
 
     ```
-    docker-compose restart api
+    <!-- docker-compose restart api -->
 
     docker-compose down
 
