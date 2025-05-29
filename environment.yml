@@ -16,9 +16,8 @@ dependencies:
   - conda-forge::mysql-connector-python
   - tqdm
   - numpy
-  
+  - tiktoken
   - conda-forge::dos2unix
-  
   - pip
 
 prefix: /opt/anaconda3/envs/MelodyMind
