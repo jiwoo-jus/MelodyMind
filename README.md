@@ -4,15 +4,15 @@ Based on your workspace, I'll explain how to set up and run the MelodyMind proje
 
 ## Prerequisites
 
-- MySQL server (download from here => https://dev.mysql.com/downloads/mysql/) with `musicoset` database already set up
+- MySQL server with `musicoset` database already set up
 - Docker is installed and running
 
 ## Setup Steps
 
 ### 1. Setup MySQL Database
 
-- Install MySQL according to your operating system
-- Download the `musicoset_dump.sql` file from the Google Drive link
+- Install MySQL according to your operating system (download from here => https://dev.mysql.com/downloads/mysql/)
+- Download the `musicoset_dump.sql` file from the Google Drive link (https://drive.google.com/drive/folders/1_lQVDc7gWdWzdMrPOCqBHAHkSwgz5iyK)
 - Import the database:
   ```bash
   mysql -u root -p < musicoset_dump.sql
