@@ -217,7 +217,7 @@ def generate_embeddings(df: pd.DataFrame, client: OpenAI, model: str, batch_size
             logger.error(f"Error processing batch starting with song_id {batch_data_with_ids[0]['song_id'] if batch_data_with_ids else 'N/A'}: {e}")
             for idx_in_batch, item_in_batch in enumerate(batch_data_with_ids):
                 original_item_index = i + idx_in_batch
-                song_id_for_error_log = prepared_prompts[original_item_index]["song_id"]
+                song_id_for_error_log = prepared_prompts_for_batching[original_item_index]["song_id"]
                 logger.warning(f"Marking embedding as None for song_id: {song_id_for_error_log} due to batch error.")
                 embeddings_data.append({
                     "song_id": song_id_for_error_log,
