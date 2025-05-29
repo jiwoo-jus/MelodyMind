@@ -1,10 +1,10 @@
-# MelodyMind Project Setup Guide
+Collecting workspace information# MelodyMind Project Setup Guide
 
 Based on your workspace, I'll explain how to set up and run the MelodyMind project with MySQL integration.
 
 ## Prerequisites
 
-- MySQL server with `musicoset` database already set up
+- MySQL server (download from here => https://dev.mysql.com/downloads/mysql/) with `musicoset` database already set up
 - Docker is installed and running
 
 ## Setup Steps
