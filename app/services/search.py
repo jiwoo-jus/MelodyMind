@@ -5,7 +5,7 @@ import os, json
 from elasticsearch import Elasticsearch
 from openai import OpenAI
 
-ES = Elasticsearch(os.getenv("ES_URL", "http://elasticsearch:9200"))
+ES = Elasticsearch(os.getenv("ELASTICSEARCH_HOST", "http://elasticsearch:9200"))
 EMB_MODEL = "text-embedding-3-small"  # 1536-dimensional embedding
 
 CLIENT = OpenAI()
@@ -56,7 +56,7 @@ def search(prompt: str, size: int = 20):
                     {
                         "multi_match": {
                             "query": " ".join(kws),
-                            "fields": ["song_name^3", "name_artists^2", "lyrics"],
+                            "fields": ["song_name^3", "artist_name^2", "lyrics"],
                             "type": "most_fields",
                             "_name": "keyword_search"
                         }
@@ -64,7 +64,7 @@ def search(prompt: str, size: int = 20):
                     {
                         "multi_match": {
                             "query": prompt,
-                            "fields": ["song_name^3", "name_artists^2", "lyrics"],
+                            "fields": ["song_name^3", "artist_name^2", "lyrics"],
                             "type": "most_fields",
                             "fuzziness": "AUTO",  # Allows minor typos or variations
                             "_name": "prompt_search"

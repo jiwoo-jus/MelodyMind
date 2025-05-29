@@ -1,14 +1,24 @@
-name: melodymind
+name: MelodyMind
 channels:
-  - defaults
   - conda-forge
+  - anaconda
+  - defaults
 dependencies:
   - python=3.9
-  - pip
   - fastapi
   - uvicorn
-  - python-dotenv
-  - elasticsearch
   - openai
-  - pydantic
+  - elasticsearch>=8.0.0,<9.0.0
+  - python-dotenv
+  - pandas
   - requests
+  - pydantic  
+  - conda-forge::mysql-connector-python
+  - tqdm
+  - numpy
+  
+  - conda-forge::dos2unix
+  
+  - pip
+
+prefix: /opt/anaconda3/envs/MelodyMind

@@ -24,7 +24,7 @@ Thumbs.db
 .idea/
 
 # Logs
-*.log
+*.log*
 
 # Python cache
 *.egg-info/
@@ -45,3 +45,4 @@ TEMP/
 *TEMP*
 *.tmp
 *copy*
+*dump*
