@@ -1,34 +1,51 @@
 # ──────────────────────────────────────────── stdlib / 3rd‑party / local
 import sys
+import sys
 import os
 import time
 from typing import List, Optional
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+<<<<<<< Updated upstream
 import uvicorn  # runs FastAPI app
 from dotenv import load_dotenv  # loads .env file
+=======
+import uvicorn
+import requests
+from fastapi.responses import JSONResponse
+from dotenv import load_dotenv
+>>>>>>> Stashed changes
 from elasticsearch import Elasticsearch, ConnectionError as ESConnectionError
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
-import requests
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from fastapi.responses import RedirectResponse
-load_dotenv()  # loads variables from .env file
+<<<<<<< Updated upstream
+# function from services/search.py that handles searching based on the prompt
 from services.search import search as hybrid_search
 # ──────────────────────────────────────────── env & clients
+load_dotenv()  # loads variables from .env file
+=======
+from fastapi.responses import RedirectResponse
+load_dotenv()
+
+from services.search import search as hybrid_search
+# ──────────────────────────────────────────── env & clients
+>>>>>>> Stashed changes
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 ES_HOST = os.getenv("ELASTICSEARCH_HOST")
 ES_INDEX = os.getenv("ELASTICSEARCH_INDEX", "songs")  # Default value retained
 
+<<<<<<< Updated upstream
+# tries to connect to elasticsearch; retries 5x with 5 sec between attempts
+=======
 # Spotify credentials
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
 
-# tries to connect to elasticsearch; retries 5x with 5 sec between attempts
+>>>>>>> Stashed changes
 def init_es(host: str, retries: int = 5, wait: int = 5) -> Optional[Elasticsearch]:
     """Initialize Elasticsearch connection with retries."""
     for attempt in range(retries):
@@ -43,7 +60,7 @@ def init_es(host: str, retries: int = 5, wait: int = 5) -> Optional[Elasticsearc
         time.sleep(wait)
     print("[ES] Failed to connect to Elasticsearch; health ping will be unavailable.")
     return None
-# connection is stored in es_client
+
 es_client: Optional[Elasticsearch] = init_es(ES_HOST)
 
 # ──────────────────────────────────────────── FastAPI app
@@ -52,9 +69,9 @@ app = FastAPI(
     description="Hybrid vector/BM25 music search powered by OpenAI + Elasticsearch.",
     version="2.0.0",
 )
-# reads list of allowed origins from .env
+
 origins = os.getenv("CORS_ORIGINS", "").split(",")
-# enable CORS
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -66,9 +83,9 @@ app.add_middleware(
 # ──────────────────────────────────────────── pydantic models
 class SearchRequest(BaseModel):
     prompt: str
-    size: int = 20  # number of results
+    size: int = 20
 
-class SongResult(BaseModel):  # structure of response
+class SongResult(BaseModel):
     title: str
     artist: str
     score: float
@@ -79,19 +96,17 @@ class SongResult(BaseModel):  # structure of response
     release_date: Optional[str] = None
 
 # ──────────────────────────────────────────── endpoints
-@app.get("/", summary="Health check") 
+@app.get("/", summary="Health check")
 def health():
     return {
         "status": "ok",
         "elasticsearch_connected": es_client.ping() if es_client else False,
         "openai_key_loaded": bool(OPENAI_API_KEY),
     }
-# what the frontend talks to when the user submits a prompt
+
 @app.post("/search", response_model=List[SongResult], summary="Hybrid search")
 def api_search(req: SearchRequest):
     try:
-        # function 'hybrid_search' sends user prompt to OpenAI to get
-        # the top 20 song documents based on similarity
         hits = hybrid_search(req.prompt, req.size)
     except Exception as e:
         print(f"Unhandled exception in hybrid_search: {type(e).__name__} - {e}")
@@ -99,8 +114,7 @@ def api_search(req: SearchRequest):
 
     results: List[SongResult] = []
     for h in hits:
-        # creates dictionary of a song's metadata
-        source = h.get("_source", {})  
+        source = h.get("_source", {})
 
         results.append(
             SongResult(
@@ -115,7 +129,6 @@ def api_search(req: SearchRequest):
             )
         )
     return results
-
 
 # ──────────────────────────────────────────── Spotify OAuth callback
 @app.get("/callback", summary="Spotify OAuth callback")
@@ -156,7 +169,6 @@ def spotify_callback(request: Request):
     except requests.exceptions.RequestException as e:
         print(f"[ERROR] Token exchange failed: {str(e)}")
         return JSONResponse(status_code=500, content={"error": "Token exchange failed", "details": str(e)})
-
 
 # ──────────────────────────────────────────── dev runner
 if __name__ == "__main__":
