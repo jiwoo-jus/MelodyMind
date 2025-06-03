@@ -44,4 +44,4 @@ htmlcov/
 TEMP/
 *TEMP*
 *.tmp
-*copy*
+*copy*.env
