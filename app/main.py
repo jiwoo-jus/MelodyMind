@@ -6,46 +6,30 @@ import time
 from typing import List, Optional
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-<<<<<<< Updated upstream
-import uvicorn  # runs FastAPI app
-from dotenv import load_dotenv  # loads .env file
-=======
 import uvicorn
 import requests
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
->>>>>>> Stashed changes
 from elasticsearch import Elasticsearch, ConnectionError as ESConnectionError
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-<<<<<<< Updated upstream
-# function from services/search.py that handles searching based on the prompt
-from services.search import search as hybrid_search
-# ──────────────────────────────────────────── env & clients
-load_dotenv()  # loads variables from .env file
-=======
 from fastapi.responses import RedirectResponse
 load_dotenv()
 
 from services.search import search as hybrid_search
 # ──────────────────────────────────────────── env & clients
->>>>>>> Stashed changes
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 ES_HOST = os.getenv("ELASTICSEARCH_HOST")
 ES_INDEX = os.getenv("ELASTICSEARCH_INDEX", "songs")  # Default value retained
 
-<<<<<<< Updated upstream
-# tries to connect to elasticsearch; retries 5x with 5 sec between attempts
-=======
 # Spotify credentials
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
 
->>>>>>> Stashed changes
 def init_es(host: str, retries: int = 5, wait: int = 5) -> Optional[Elasticsearch]:
     """Initialize Elasticsearch connection with retries."""
     for attempt in range(retries):
