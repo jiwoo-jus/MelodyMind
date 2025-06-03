@@ -45,3 +45,4 @@ TEMP/
 *TEMP*
 *.tmp
 *copy*.env
+musicoset_dump.sql
