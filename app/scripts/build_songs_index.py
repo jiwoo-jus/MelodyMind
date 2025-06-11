@@ -48,10 +48,6 @@ def load_data_from_db() -> pd.DataFrame:
         if conn.is_connected():
             print("Successfully connected to the database.")
 
-        # Adjust the JOIN based on how artists are linked.
-        # This query assumes songs.artists contains a JSON-like string with artist IDs
-        # and we take the first artist_id for joining with the artists table.
-        # This part might need significant adjustment based on actual songs.artists structure.
         query = f"""
         SELECT
             s.song_id,
@@ -66,49 +62,24 @@ def load_data_from_db() -> pd.DataFrame:
             ar.artist_type,
             ar.main_genre,
             ar.genres,
-            ar.image_url
+            ar.image_url,
+            sl.spotify_url,
+            sl.youtube_music_url,
+            sl.apple_music_url
         FROM
             songs s
         LEFT JOIN
             lyrics l ON s.song_id = l.song_id COLLATE utf8mb3_general_ci
         LEFT JOIN
             embeddings e ON s.song_id = e.song_id
-        LEFT JOIN 
-            artists ar ON ar.artist_id = TRIM(BOTH "'" FROM SUBSTRING_INDEX(SUBSTRING_INDEX(s.artists, "'", 2), "'", -1));
+        LEFT JOIN
+            artists ar ON ar.artist_id = TRIM(BOTH "'" FROM SUBSTRING_INDEX(SUBSTRING_INDEX(s.artists, "'", 2), "'", -1))
+        LEFT JOIN
+            melodymind_song_links sl ON s.song_id = sl.song_id;
         """
-        # The WHERE e.embedding IS NOT NULL ensures we only get songs with embeddings.
-
         print("Fetching data from database...")
         df = pd.read_sql(query, conn)
         print(f"Loaded {len(df)} songs with embeddings from database.")
-
-        # Process artists_id and artists_name from s_artists
-        # This is a simplified approach; robust parsing is needed if s_artists is complex.
-        def extract_artist_info(s_artists_json_str):
-            try:
-                if pd.isna(s_artists_json_str) or not s_artists_json_str.strip():
-                    return None, None
-                # Attempt to parse as JSON, assuming format like {'id': 'name', ...}
-                artists_dict = json.loads(s_artists_json_str.replace("'", "\""))
-                first_artist_id = next(iter(artists_dict.keys()), None)
-                first_artist_name = artists_dict.get(first_artist_id) if first_artist_id else None
-                return first_artist_id, first_artist_name
-            except (json.JSONDecodeError, TypeError):
-                # Fallback or more sophisticated parsing might be needed
-                # For now, if it's not simple JSON, we might not get these fields correctly
-                # If s.artists was already joined correctly, this part might not be needed
-                return None, None
-
-        # If the JOIN for artists table was successful, artist_id and artist_name are already there.
-        # If not, and you need to parse s.artists:
-        # df[['id_artists_extracted', 'name_artists_extracted']] = df['s_artists'].apply(
-        #     lambda x: pd.Series(extract_artist_info(x))
-        # )
-        # Then decide which artist fields to use. For now, assuming JOIN worked or s_artists is simple.
-        # We will use 'artist_id' and 'artist_name' from the artists table join.
-        # 's_artists' can be dropped if not needed further.
-        # df.drop(columns=['s_artists'], inplace=True, errors='ignore')
-
 
         # Convert JSON string embedding to list
         df['embedding'] = df['embedding'].apply(lambda x: json.loads(x) if x else None)
@@ -147,6 +118,8 @@ def create_index(es: Elasticsearch, index_name: str, dims: int):
                 "main_genre": {"type": "keyword"},
                 "genres": {"type": "text"}, # Can be keyword if you don't need partial match on genres string
                 "image_url": {"type": "keyword"},
+                "spotify_url": {"type": "keyword"},
+                "youtubemusic_url": {"type": "keyword"},
                 "embedding": {
                     "type": "dense_vector",
                     "dims": dims,
@@ -203,6 +176,8 @@ def bulk_load(es: Elasticsearch, index_name: str, df: pd.DataFrame):
             "genres": r.genres,
             "image_url": r.image_url,
             "embedding": r.embedding,
+            "spotify_url": r.spotify_url,
+            "youtubemusic_url": r.youtube_music_url,
         }
         # Clean NaN/None for text fields to avoid issues with ES
         for key in ["song_name", "lyrics", "song_type", "artist_id", "name_artists", "artist_type", "main_genre", "genres", "image_url"]:

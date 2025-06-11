@@ -19,5 +19,6 @@ dependencies:
   - tiktoken
   - conda-forge::dos2unix
   - pip
+  - ytmusicapi
 
 prefix: /opt/anaconda3/envs/MelodyMind
