@@ -14,8 +14,8 @@ from ytmusicapi import YTMusic
 load_dotenv("/Users/jiwoo/WorkSpace/MelodyMind/.env")
 
 # Configuration flags - Set these to control which services to fetch from
-FETCH_SPOTIFY = True
-FETCH_YOUTUBE_MUSIC = False
+FETCH_SPOTIFY = False
+FETCH_YOUTUBE_MUSIC = True
 
 # Database configuration
 DB_CONFIG = {
@@ -432,22 +432,45 @@ class MusicLinkCollector:
             return []
             
     def save_links_to_db(self, song_id, spotify_url=None, youtube_music_url=None):
-        """Save music links to database"""
+        """Save music links to database - only update non-None values"""
         if not self.db_connection:
             return False
             
         cursor = self.db_connection.cursor()
-        query = """
+        
+        # Build dynamic query based on which URLs are provided
+        update_fields = []
+        values = [song_id]
+        
+        if spotify_url is not None:
+            update_fields.append("spotify_url = %s")
+            values.append(spotify_url)
+        
+        if youtube_music_url is not None:
+            update_fields.append("youtube_music_url = %s")
+            values.append(youtube_music_url)
+        
+        # If no URLs to update, skip
+        if not update_fields:
+            logger.warning(f"No URLs to update for song_id {song_id}")
+            return True
+        
+        # Add updated_at to update fields
+        update_fields.append("updated_at = CURRENT_TIMESTAMP")
+        
+        query = f"""
         INSERT INTO melodymind_song_links (song_id, spotify_url, youtube_music_url)
         VALUES (%s, %s, %s)
         ON DUPLICATE KEY UPDATE
-        spotify_url = VALUES(spotify_url),
-        youtube_music_url = VALUES(youtube_music_url),
-        updated_at = CURRENT_TIMESTAMP
+        {', '.join(update_fields)}
         """
         
+        # For INSERT part, we need all values (song_id, spotify_url, youtube_music_url)
+        insert_values = [song_id, spotify_url, youtube_music_url]
+        final_values = insert_values + values[1:]  # Skip song_id from update values
+        
         try:
-            cursor.execute(query, (song_id, spotify_url, youtube_music_url))
+            cursor.execute(query, final_values)
             self.db_connection.commit()
             cursor.close()
             return True
@@ -488,9 +511,9 @@ class MusicLinkCollector:
             if album_name:
                 album_name = album_name.strip()
             
-            # Initialize URLs
-            spotify_url = None
-            youtube_music_url = None
+            # Initialize URLs - only initialize URLs for enabled services
+            spotify_url = None if FETCH_SPOTIFY else "SKIP"
+            youtube_music_url = None if FETCH_YOUTUBE_MUSIC else "SKIP"
             
             # Create display info
             album_info = f" from '{album_name}'" if album_name else ""
@@ -522,15 +545,18 @@ class MusicLinkCollector:
                         'timestamp': datetime.now()
                     })
             
-            # Save to database
-            success = self.save_links_to_db(song['song_id'], spotify_url, youtube_music_url)
+            # Save to database - only pass URLs for enabled services
+            save_spotify = spotify_url if FETCH_SPOTIFY else None
+            save_youtube = youtube_music_url if FETCH_YOUTUBE_MUSIC else None
+            
+            success = self.save_links_to_db(song['song_id'], save_spotify, save_youtube)
             
             if success:
                 success_count += 1
                 links_found = []
-                if spotify_url:
+                if FETCH_SPOTIFY and spotify_url:
                     links_found.append("Spotify")
-                if youtube_music_url:
+                if FETCH_YOUTUBE_MUSIC and youtube_music_url:
                     links_found.append("YouTube Music")
                 
                 logger.info(f"✓ Saved ({', '.join(links_found) if links_found else 'No links found'})")
