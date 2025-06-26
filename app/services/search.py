@@ -36,7 +36,16 @@ def keyword_expand(prompt: str) -> List[str]:
     return [str(k).strip() for k in raw if str(k).strip()]
 
 
-def search(prompt: str, size: int = 20):
+def search(
+    prompt: str,
+    size: int = 20,
+    *,
+    artist: str | None = None,
+    album: str | None = None,
+    song_type: str | None = None,
+    release_from: str | None = None,
+    release_to: str | None = None,
+):
     vec = embed(prompt)
     kws = keyword_expand(prompt)
 
@@ -56,7 +65,7 @@ def search(prompt: str, size: int = 20):
                     {
                         "multi_match": {
                             "query": " ".join(kws),
-                            "fields": ["song_name^3", "artist_name^2", "lyrics"],
+                            "fields": ["song_name^3", "name_artists^2", "lyrics"],
                             "type": "most_fields",
                             "_name": "keyword_search"
                         }
@@ -64,7 +73,7 @@ def search(prompt: str, size: int = 20):
                     {
                         "multi_match": {
                             "query": prompt,
-                            "fields": ["song_name^3", "artist_name^2", "lyrics"],
+                            "fields": ["song_name^3", "name_artists^2", "lyrics"],
                             "type": "most_fields",
                             "fuzziness": "AUTO",  # Allows minor typos or variations
                             "_name": "prompt_search"
@@ -74,5 +83,23 @@ def search(prompt: str, size: int = 20):
             }
         }
     }
+
+    filters = []
+    if artist:
+        filters.append({"term": {"name_artists.keyword": artist}})
+    if album:
+        filters.append({"term": {"album_name.keyword": album}})
+    if song_type:
+        filters.append({"term": {"song_type": song_type}})
+    if release_from or release_to:
+        range_filter = {"range": {"release_date": {}}}
+        if release_from:
+            range_filter["range"]["release_date"]["gte"] = release_from
+        if release_to:
+            range_filter["range"]["release_date"]["lte"] = release_to
+        filters.append(range_filter)
+
+    if filters:
+        es_query["query"]["bool"]["filter"] = filters
     res = ES.search(index="songs", body=es_query)
     return res["hits"]["hits"]

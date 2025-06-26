@@ -59,6 +59,8 @@ def load_data_from_db() -> pd.DataFrame:
             s.artists AS s_artists,
             s.popularity,
             s.song_type,
+            s.album_name,
+            s.release_date,
             l.lyrics,
             e.embedding,
             ar.artist_id,
@@ -140,6 +142,8 @@ def create_index(es: Elasticsearch, index_name: str, dims: int):
                 "lyrics": {"type": "text", "analyzer": "standard"},
                 "popularity": {"type": "integer"},
                 "song_type": {"type": "keyword"},
+                "album_name": {"type": "text", "analyzer": "standard"},
+                "release_date": {"type": "date"},
                 # Artist related fields from 'artists' table
                 "artist_id": {"type": "keyword"}, # from artists.artist_id
                 "name_artists": {"type": "text", "analyzer": "standard"}, # from artists.name
@@ -158,7 +162,6 @@ def create_index(es: Elasticsearch, index_name: str, dims: int):
                 # "track_number": {"type": "integer"},
                 # "num_artists": {"type": "integer"},
                 # "num_available_markets": {"type": "integer"},
-                # "release_date": {"type": "date"},
                 # "duration_ms": {"type": "integer"},
                 # "key": {"type": "integer"},
                 # "mode": {"type": "integer"},
@@ -196,6 +199,8 @@ def bulk_load(es: Elasticsearch, index_name: str, df: pd.DataFrame):
             "lyrics": r.lyrics,
             "popularity": None if pd.isna(r.popularity) else int(r.popularity),
             "song_type": r.song_type,
+            "album_name": r.album_name,
+            "release_date": r.release_date,
             "artist_id": r.artist_id, # from artists table
             "name_artists": r.name_artists, # from artists table
             "artist_type": r.artist_type,
@@ -205,7 +210,19 @@ def bulk_load(es: Elasticsearch, index_name: str, df: pd.DataFrame):
             "embedding": r.embedding,
         }
         # Clean NaN/None for text fields to avoid issues with ES
-        for key in ["song_name", "lyrics", "song_type", "artist_id", "name_artists", "artist_type", "main_genre", "genres", "image_url"]:
+        for key in [
+            "song_name",
+            "lyrics",
+            "song_type",
+            "album_name",
+            "release_date",
+            "artist_id",
+            "name_artists",
+            "artist_type",
+            "main_genre",
+            "genres",
+            "image_url",
+        ]:
             if pd.isna(source_doc.get(key)):
                 source_doc[key] = None # Or "" if you prefer empty string
 

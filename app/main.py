@@ -57,6 +57,11 @@ app.add_middleware(
 class SearchRequest(BaseModel):
     prompt: str
     size: int = 20
+    artist: Optional[str] = None
+    album: Optional[str] = None
+    song_type: Optional[str] = None
+    release_from: Optional[str] = None
+    release_to: Optional[str] = None
 
 class SongResult(BaseModel):
     title: str
@@ -80,7 +85,15 @@ def health():
 @app.post("/search", response_model=List[SongResult], summary="Hybrid search")
 def api_search(req: SearchRequest):
     try:
-        hits = hybrid_search(req.prompt, req.size)
+        hits = hybrid_search(
+            req.prompt,
+            req.size,
+            artist=req.artist,
+            album=req.album,
+            song_type=req.song_type,
+            release_from=req.release_from,
+            release_to=req.release_to,
+        )
     except Exception as e:
         print(f"Unhandled exception in hybrid_search: {type(e).__name__} - {e}")
         raise HTTPException(status_code=500, detail=f"Search backend error: {str(e)}")
