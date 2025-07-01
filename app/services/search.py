@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import List
+from typing import List, Optional, Dict
 import os, json
 
 from elasticsearch import Elasticsearch
@@ -36,9 +36,20 @@ def keyword_expand(prompt: str) -> List[str]:
     return [str(k).strip() for k in raw if str(k).strip()]
 
 
-def search(prompt: str, size: int = 20):
+def search(prompt: str, size: int = 20, filters: Optional[Dict[str, str]] = None):
     vec = embed(prompt)
     kws = keyword_expand(prompt)
+
+    filter_clauses = []
+    if filters:
+        if artist := filters.get("artist_name"):
+            filter_clauses.append({"match": {"name_artists": artist}})
+        if album := filters.get("album_name"):
+            filter_clauses.append({"match": {"album_name": album}})
+        if song_type := filters.get("song_type"):
+            filter_clauses.append({"term": {"song_type": song_type}})
+        if release_date := filters.get("release_date"):
+            filter_clauses.append({"match": {"release_date": release_date}})
 
     es_query = {
         "size": size,
@@ -56,7 +67,7 @@ def search(prompt: str, size: int = 20):
                     {
                         "multi_match": {
                             "query": " ".join(kws),
-                            "fields": ["song_name^3", "artist_name^2", "lyrics"],
+                            "fields": ["song_name^3", "name_artists^2", "lyrics"],
                             "type": "most_fields",
                             "_name": "keyword_search"
                         }
@@ -64,13 +75,14 @@ def search(prompt: str, size: int = 20):
                     {
                         "multi_match": {
                             "query": prompt,
-                            "fields": ["song_name^3", "artist_name^2", "lyrics"],
+                            "fields": ["song_name^3", "name_artists^2", "lyrics"],
                             "type": "most_fields",
                             "fuzziness": "AUTO",  # Allows minor typos or variations
                             "_name": "prompt_search"
                         }
                     }
-                ]
+                ],
+                "filter": filter_clauses
             }
         }
     }
