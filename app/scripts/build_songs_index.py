@@ -63,6 +63,8 @@ def load_data_from_db() -> pd.DataFrame:
             ar.main_genre,
             ar.genres,
             ar.image_url,
+            a.name AS album_name,
+            a.release_date,
             sl.spotify_url,
             sl.youtube_music_url,
             sl.apple_music_url
@@ -74,6 +76,10 @@ def load_data_from_db() -> pd.DataFrame:
             embeddings e ON s.song_id = e.song_id
         LEFT JOIN
             artists ar ON ar.artist_id = TRIM(BOTH "'" FROM SUBSTRING_INDEX(SUBSTRING_INDEX(s.artists, "'", 2), "'", -1))
+        LEFT JOIN
+            tracks t ON s.song_id = t.song_id
+        LEFT JOIN
+            albums a ON t.album_id = a.album_id
         LEFT JOIN
             melodymind_song_links sl ON s.song_id = sl.song_id;
         """
@@ -118,6 +124,8 @@ def create_index(es: Elasticsearch, index_name: str, dims: int):
                 "main_genre": {"type": "keyword"},
                 "genres": {"type": "text"}, # Can be keyword if you don't need partial match on genres string
                 "image_url": {"type": "keyword"},
+                "album_name": {"type": "text", "analyzer": "standard"},
+                "release_date": {"type": "date"},
                 "spotify_url": {"type": "keyword"},
                 "youtubemusic_url": {"type": "keyword"},
                 "embedding": {
@@ -175,12 +183,14 @@ def bulk_load(es: Elasticsearch, index_name: str, df: pd.DataFrame):
             "main_genre": r.main_genre,
             "genres": r.genres,
             "image_url": r.image_url,
+            "album_name": r.album_name,
+            "release_date": r.release_date,
             "embedding": r.embedding,
             "spotify_url": r.spotify_url,
             "youtubemusic_url": r.youtube_music_url,
         }
         # Clean NaN/None for text fields to avoid issues with ES
-        for key in ["song_name", "lyrics", "song_type", "artist_id", "name_artists", "artist_type", "main_genre", "genres", "image_url"]:
+        for key in ["song_name", "lyrics", "song_type", "artist_id", "name_artists", "artist_type", "main_genre", "genres", "image_url", "album_name", "release_date"]:
             if pd.isna(source_doc.get(key)):
                 source_doc[key] = None # Or "" if you prefer empty string
 
