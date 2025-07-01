@@ -225,6 +225,37 @@ def generate_embeddings(df: pd.DataFrame, client: OpenAI, model: str, batch_size
                 })
     return embeddings_data
 
+
+def detect_moods_from_lyrics(lyrics: str) -> List[str]:
+    """Use OpenAI to detect moods from lyrics"""
+    prompt = f"""
+    Analyze the following song lyrics and identify up to 3 predominant moods/emotions.
+    Choose from this list: happy, sad, angry, romantic, energetic, calm, nostalgic, melancholic, uplifting, aggressive
+    
+    Return ONLY a JSON array of mood strings, like: ["mood1", "mood2", "mood3"]
+    
+    Lyrics:
+    {lyrics[:2000]}  # Truncate to avoid token limits
+    """
+
+    try:
+        response = CLIENT.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
+        moods = json.loads(response.choices[0].message.content)
+        return [m.lower() for m in moods if m.lower() in MOOD_OPTIONS]
+    except Exception:
+        return []
+
+# Add to generate_embeddings function
+def generate_embeddings(df: pd.DataFrame, ...):
+    # ... existing code ...
+    moods = detect_moods_from_lyrics(row["lyrics"])
+    # Store moods in database
+
+
 def save_embeddings_to_db(embeddings_data: list):
     """Save the list of embeddings to the MySQL database."""
     conn = None
