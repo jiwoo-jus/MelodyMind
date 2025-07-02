@@ -4,190 +4,262 @@ import os
 import pandas as pd
 import tqdm
 from elasticsearch import Elasticsearch, helpers
-from openai import OpenAI
-import tiktoken
+# OpenAI and tiktoken are no longer needed for embedding generation here
 from dotenv import load_dotenv
+import mysql.connector
+import json # For parsing artists column and loading embedding
 
 # Load environment variables
-load_dotenv(dotenv_path="/Users/cassie/code/capstone/melodymind/.env")
+load_dotenv()
 
-# Check if API key is loaded
-api_key = os.getenv("OPENAI_API_KEY")
-if not api_key:
-    raise SystemExit("OPENAI_API_KEY is missing. Check your .env file.")
+# Environment variables for DB and Elasticsearch
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = os.getenv("DB_NAME", "musicoset")
+ES_URL = os.getenv("ELASTICSEARCH_HOST", "http://elasticsearch:9200")
+ES_INDEX = os.getenv("ELASTICSEARCH_INDEX", "songs")
+
+# Fixed model name and embedding dimensions (assuming embeddings were created with this)
+# This is mainly for the Elasticsearch mapping if not dynamically fetched.
+EMB_MODEL = "text-embedding-3-small" # Or your actual model
+DIMS = 1536 # Or your actual embedding dimensions
 
 # ───────────────────────────────────────────────────────────── CLI ──
 def parse_args() -> argparse.Namespace:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--data-dir", required=True, help="Directory containing hits_dataset.csv and lyrics.csv")
-    ap.add_argument("--es-url", default=os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200"), help="Elasticsearch URL")
-    ap.add_argument("--openai-key", default=os.getenv("OPENAI_API_KEY"), help="OpenAI API key (or set OPENAI_API_KEY in .env)")
-    ap.add_argument("--batch", type=int, default=25, help="Approx records per OpenAI request (auto-split by token)")
-    ap.add_argument("--max-song-tokens", type=int, default=400, help="Max tokens kept per song before embedding")
+    ap = argparse.ArgumentParser(description="Build Elasticsearch index from MySQL database.")
+    ap.add_argument("--es-url", default=ES_URL, help="Elasticsearch URL")
+    ap.add_argument("--es-index", default=ES_INDEX, help="Elasticsearch index name")
+    # DB connection args can be added if needed, or rely on .env
     return ap.parse_args()
 
-# Fixed model name and embedding dimensions
-EMB_MODEL = "text-embedding-3-small"
-dims = 1536
-
 # ───────────────────────────────────────────────────────────── data ──
-def load_data(base: str) -> pd.DataFrame:
-    """Load and merge hits and lyrics datasets."""
-    hits = pd.read_csv(f"{base}/hits_dataset.csv", sep="\t", on_bad_lines="skip")
-    lyrics = pd.read_csv(f"{base}/lyrics.csv", sep="\t", on_bad_lines="skip")
+def load_data_from_db() -> pd.DataFrame:
+    """Load song data from MySQL database."""
+    conn = None
+    try:
+        print(f"Connecting to database {DB_NAME} on {DB_HOST}...")
+        conn = mysql.connector.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME
+        )
+        if conn.is_connected():
+            print("Successfully connected to the database.")
 
-    hits.columns = hits.columns.str.strip()
-    lyrics.columns = lyrics.columns.str.strip()
+        # Adjust the JOIN based on how artists are linked.
+        # This query assumes songs.artists contains a JSON-like string with artist IDs
+        # and we take the first artist_id for joining with the artists table.
+        # This part might need significant adjustment based on actual songs.artists structure.
+        query = f"""
+        SELECT
+            s.song_id,
+            s.song_name,
+            s.artists AS s_artists,
+            s.popularity,
+            s.song_type,
+            l.lyrics,
+            e.embedding,
+            ar.artist_id,
+            ar.name AS name_artists,
+            ar.artist_type,
+            ar.main_genre,
+            ar.genres,
+            ar.image_url
+        FROM
+            songs s
+        LEFT JOIN
+            lyrics l ON s.song_id = l.song_id COLLATE utf8mb3_general_ci
+        LEFT JOIN
+            embeddings e ON s.song_id = e.song_id
+        LEFT JOIN 
+            artists ar ON ar.artist_id = TRIM(BOTH "'" FROM SUBSTRING_INDEX(SUBSTRING_INDEX(s.artists, "'", 2), "'", -1));
+        """
+        # The WHERE e.embedding IS NOT NULL ensures we only get songs with embeddings.
 
-    print(f"Hits rows: {len(hits)}, Lyrics rows: {len(lyrics)}")
-    merged = hits.merge(lyrics, on="song_id", how="left")
-    print(f"Merged rows: {len(merged)}")
-    return merged
+        print("Fetching data from database...")
+        df = pd.read_sql(query, conn)
+        print(f"Loaded {len(df)} songs with embeddings from database.")
+
+        # Process artists_id and artists_name from s_artists
+        # This is a simplified approach; robust parsing is needed if s_artists is complex.
+        def extract_artist_info(s_artists_json_str):
+            try:
+                if pd.isna(s_artists_json_str) or not s_artists_json_str.strip():
+                    return None, None
+                # Attempt to parse as JSON, assuming format like {'id': 'name', ...}
+                artists_dict = json.loads(s_artists_json_str.replace("'", "\""))
+                first_artist_id = next(iter(artists_dict.keys()), None)
+                first_artist_name = artists_dict.get(first_artist_id) if first_artist_id else None
+                return first_artist_id, first_artist_name
+            except (json.JSONDecodeError, TypeError):
+                # Fallback or more sophisticated parsing might be needed
+                # For now, if it's not simple JSON, we might not get these fields correctly
+                # If s.artists was already joined correctly, this part might not be needed
+                return None, None
+
+        # If the JOIN for artists table was successful, artist_id and artist_name are already there.
+        # If not, and you need to parse s.artists:
+        # df[['id_artists_extracted', 'name_artists_extracted']] = df['s_artists'].apply(
+        #     lambda x: pd.Series(extract_artist_info(x))
+        # )
+        # Then decide which artist fields to use. For now, assuming JOIN worked or s_artists is simple.
+        # We will use 'artist_id' and 'artist_name' from the artists table join.
+        # 's_artists' can be dropped if not needed further.
+        # df.drop(columns=['s_artists'], inplace=True, errors='ignore')
+
+
+        # Convert JSON string embedding to list
+        df['embedding'] = df['embedding'].apply(lambda x: json.loads(x) if x else None)
+
+        return df
+
+    except mysql.connector.Error as e:
+        print(f"Error connecting to MySQL or executing query: {e}")
+        return pd.DataFrame()
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
+            print("Database connection closed.")
 
 # ─────────────────────────────────────────── Elasticsearch index ──
-def create_index(es: Elasticsearch, dims: int):
+def create_index(es: Elasticsearch, index_name: str, dims: int):
     """Create the Elasticsearch index with the required mapping."""
+    if es.indices.exists(index=index_name):
+        print(f"Index '{index_name}' already exists. Deleting and recreating.")
+        es.indices.delete(index=index_name, ignore=[400, 404])
+    else:
+        print(f"Creating index '{index_name}'.")
+
     mapping = {
         "mappings": {
             "properties": {
                 "song_id": {"type": "keyword"},
-                "song_name": {"type": "text"},
-                "id_artists": {"type": "keyword"},
-                "name_artists": {"type": "text"},
+                "song_name": {"type": "text", "analyzer": "standard"},
+                "lyrics": {"type": "text", "analyzer": "standard"},
                 "popularity": {"type": "integer"},
-                "explicit": {"type": "boolean"},
                 "song_type": {"type": "keyword"},
-                "track_number": {"type": "integer"},
-                "num_artists": {"type": "integer"},
-                "num_available_markets": {"type": "integer"},
-                "release_date": {"type": "date"},
-                "duration_ms": {"type": "integer"},
-                "key": {"type": "integer"},
-                "mode": {"type": "integer"},
-                "time_signature": {"type": "integer"},
-                "acousticness": {"type": "float"},
-                "danceability": {"type": "float"},
-                "energy": {"type": "float"},
-                "instrumentalness": {"type": "float"},
-                "liveness": {"type": "float"},
-                "loudness": {"type": "float"},
-                "speechiness": {"type": "float"},
-                "valence": {"type": "float"},
-                "tempo": {"type": "float"},
-                "embedding": {  # Dense vector field
+                # Artist related fields from 'artists' table
+                "artist_id": {"type": "keyword"}, # from artists.artist_id
+                "name_artists": {"type": "text", "analyzer": "standard"}, # from artists.name
+                "artist_type": {"type": "keyword"},
+                "main_genre": {"type": "keyword"},
+                "genres": {"type": "text"}, # Can be keyword if you don't need partial match on genres string
+                "image_url": {"type": "keyword"},
+                "embedding": {
                     "type": "dense_vector",
                     "dims": dims,
                     "index": True,
                     "similarity": "cosine"
                 }
+                # Add other fields from your SELECT statement as needed
+                # "explicit": {"type": "boolean"},
+                # "track_number": {"type": "integer"},
+                # "num_artists": {"type": "integer"},
+                # "num_available_markets": {"type": "integer"},
+                # "release_date": {"type": "date"},
+                # "duration_ms": {"type": "integer"},
+                # "key": {"type": "integer"},
+                # "mode": {"type": "integer"},
+                # "time_signature": {"type": "integer"},
+                # "acousticness": {"type": "float"},
+                # "danceability": {"type": "float"},
+                # "energy": {"type": "float"},
+                # "instrumentalness": {"type": "float"},
+                # "liveness": {"type": "float"},
+                # "loudness": {"type": "float"},
+                # "speechiness": {"type": "float"},
+                # "valence": {"type": "float"},
+                # "tempo": {"type": "float"},
             }
         }
     }
-    es.indices.delete(index="songs", ignore=[400, 404])
-    es.indices.create(index="songs", body=mapping)
+    es.indices.create(index=index_name, body=mapping)
+    print(f"Index '{index_name}' created with mapping.")
 
-# ───────────────────────────────────────────── embeddings ──
-def build_embeddings(df: pd.DataFrame, client: OpenAI, model: str, approx_batch: int, max_tokens_song: int) -> pd.DataFrame:
-    """Generate embeddings for the dataset."""
-    enc = tiktoken.encoding_for_model(model)
-    df = df.copy()
 
-    # Clip text to max tokens
-    def clip_text(text: str) -> str:
-        toks = enc.encode(text)
-        return enc.decode(toks[:max_tokens_song])
-
-    df["prompt"] = (
-        df["song_name"].astype(str)
-        + " by "
-        + df["name_artists"].astype(str)
-        + "\n\n"
-        + df["lyrics"].fillna("").astype(str).map(clip_text)
-    )
-
-    # Split into chunks for OpenAI API
-    inputs, chunk, tot = [], [], 0
-    for text in df["prompt"]:
-        tlen = len(enc.encode(text))
-        if chunk and (tot + tlen > 8192 or len(chunk) >= approx_batch):
-            inputs.append(chunk)
-            chunk, tot = [], 0
-        chunk.append(text)
-        tot += tlen
-    if chunk:
-        inputs.append(chunk)
-
-    # Call OpenAI API
-    embeds = []
-    for c in tqdm.tqdm(inputs, desc="Embedding"):
-        rsp = client.embeddings.create(model=model, input=c)
-        embeds.extend([v.embedding for v in rsp.data])
-
-    df["embedding"] = embeds
-    return df
+# build_embeddings function is removed as embeddings are pre-generated
 
 # ─────────────────────────────────────────── bulk loader ──
-def bulk_load(es: Elasticsearch, df: pd.DataFrame):
+def bulk_load(es: Elasticsearch, index_name: str, df: pd.DataFrame):
     """Bulk load data into Elasticsearch."""
-    actions = (
-        {
-            "_index": "songs",
-            "_id": str(r.song_id),
-            "_source": {
-                "song_id": str(r.song_id),
-                "song_name": r.song_name,
-                "id_artists": r.id_artists,
-                "name_artists": r.name_artists,
-                "popularity": None if pd.isna(r.popularity) else int(r.popularity),
-                "explicit": None if pd.isna(r.explicit) else bool(r.explicit),
-                "song_type": r.song_type,
-                "track_number": None if pd.isna(r.track_number) else int(r.track_number),
-                "num_artists": None if pd.isna(r.num_artists) else int(r.num_artists),
-                "num_available_markets": None if pd.isna(r.num_available_markets) else int(r.num_available_markets),
-                "release_date": r.release_date,
-                "duration_ms": None if pd.isna(r.duration_ms) else int(r.duration_ms),
-                "key": None if pd.isna(r.key) else int(r.key),
-                "mode": None if pd.isna(r.mode) else int(r.mode),
-                "time_signature": None if pd.isna(r.time_signature) else int(r.time_signature),
-                "acousticness": r.acousticness,
-                "danceability": r.danceability,
-                "energy": r.energy,
-                "instrumentalness": r.instrumentalness,
-                "liveness": r.liveness,
-                "loudness": r.loudness,
-                "speechiness": r.speechiness,
-                "valence": r.valence,
-                "tempo": r.tempo,
-                "embedding": r.embedding,
-                "lyrics": r.lyrics,
-            }
+    actions = []
+    for r in df.itertuples(index=False): # index=False to avoid _0, _1 etc. as field names
+        if r.embedding is None: # Skip if embedding is missing
+            print(f"Skipping song_id {r.song_id} due to missing embedding.")
+            continue
+
+        source_doc = {
+            "song_id": str(r.song_id),
+            "song_name": r.song_name,
+            "lyrics": r.lyrics,
+            "popularity": None if pd.isna(r.popularity) else int(r.popularity),
+            "song_type": r.song_type,
+            "artist_id": r.artist_id, # from artists table
+            "name_artists": r.name_artists, # from artists table
+            "artist_type": r.artist_type,
+            "main_genre": r.main_genre,
+            "genres": r.genres,
+            "image_url": r.image_url,
+            "embedding": r.embedding,
         }
-        for r in df.itertuples()
-    )
-    helpers.bulk(es, actions, request_timeout=120)
+        # Clean NaN/None for text fields to avoid issues with ES
+        for key in ["song_name", "lyrics", "song_type", "artist_id", "name_artists", "artist_type", "main_genre", "genres", "image_url"]:
+            if pd.isna(source_doc.get(key)):
+                source_doc[key] = None # Or "" if you prefer empty string
+
+        actions.append({
+            "_index": index_name,
+            "_id": str(r.song_id),
+            "_source": source_doc
+        })
+
+    if not actions:
+        print("No actions to perform for bulk load.")
+        return
+
+    print(f"Starting bulk load of {len(actions)} documents...")
+    try:
+        successes, errors = helpers.bulk(es, actions, request_timeout=120, raise_on_error=False)
+        print(f"Bulk load completed. Successes: {successes}, Errors: {len(errors)}")
+        if errors:
+            print("First 5 errors:")
+            for i, error_info in enumerate(errors[:5]):
+                print(f"  Error {i+1}: {error_info}")
+    except Exception as e:
+        print(f"An exception occurred during bulk loading: {e}")
+
 
 # ───────────────────────────────────────────────────────────── main ──
 def main():
     args = parse_args()
-    if not args.openai_key:
-        raise SystemExit("OPENAI_API_KEY is missing. Set it in .env or pass it as a flag.")
 
-    client = OpenAI(api_key=args.openai_key)
+    if not all([DB_USER, DB_PASSWORD, DB_NAME]):
+        raise SystemExit("Database credentials (DB_USER, DB_PASSWORD, DB_NAME) are missing. Check your .env file.")
+
     es = Elasticsearch(args.es_url, request_timeout=120)
+    if not es.ping():
+        raise SystemExit(f"Failed to connect to Elasticsearch at {args.es_url}")
+    print(f"Successfully connected to Elasticsearch at {args.es_url}")
 
-    print("· Loading CSVs")
-    df = load_data(args.data_dir)
 
-    print("· Generating embeddings")
-    df = build_embeddings(df, client, EMB_MODEL, approx_batch=args.batch, max_tokens_song=args.max_song_tokens)
+    print("· Loading data from database")
+    df = load_data_from_db()
 
-    print("· Creating Elasticsearch index")
-    create_index(es, dims)
+    if df.empty:
+        print("No data loaded from the database. Exiting.")
+        return
 
-    print("· Bulk indexing")
-    bulk_load(es, df)
+    # Embedding generation is skipped as it's pre-loaded
 
-    print(f"Completed. Indexed {len(df)} songs with {dims}-d vectors.")
+    print(f"· Creating Elasticsearch index '{args.es_index}'")
+    create_index(es, args.es_index, DIMS) # Pass DIMS for mapping
+
+    print(f"· Bulk indexing to '{args.es_index}'")
+    bulk_load(es, args.es_index, df)
+
+    print(f"Completed. Indexed {len(df)} songs into '{args.es_index}'.")
 
 # ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
