@@ -10,9 +10,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+# Load environment variables before importing modules that rely on them
+load_dotenv()
+
 from services.search import search as hybrid_search
 # ──────────────────────────────────────────── env & clients
-load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
