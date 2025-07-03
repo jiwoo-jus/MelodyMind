@@ -93,7 +93,7 @@ def api_search(req: SearchRequest):
                 "release_date": req.release_date,
             }.items() if v
         }
-        hits = hybrid_search(req.prompt, req.size, filters)
+        hits = hybrid_search(req.prompt, req.size, filters, ES_INDEX)
     except Exception as e:
         print(f"Unhandled exception in hybrid_search: {type(e).__name__} - {e}")
         raise HTTPException(status_code=500, detail=f"Search backend error: {str(e)}")
