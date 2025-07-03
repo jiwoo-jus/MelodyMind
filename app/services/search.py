@@ -5,6 +5,8 @@ import os, json
 from elasticsearch import Elasticsearch
 from openai import OpenAI
 
+ES_INDEX = os.getenv("ELASTICSEARCH_INDEX", "songs")
+
 ES = Elasticsearch(os.getenv("ELASTICSEARCH_HOST", "http://elasticsearch:9200"))
 EMB_MODEL = "text-embedding-3-small"  # 1536-dimensional embedding
 
@@ -36,7 +38,7 @@ def keyword_expand(prompt: str) -> List[str]:
     return [str(k).strip() for k in raw if str(k).strip()]
 
 
-def search(prompt: str, size: int = 20, filters: Optional[Dict[str, str]] = None):
+def search(prompt: str, size: int = 20, filters: Optional[Dict[str, str]] = None, es_index: str = ES_INDEX):
     vec = embed(prompt)
     kws = keyword_expand(prompt)
 
@@ -86,5 +88,5 @@ def search(prompt: str, size: int = 20, filters: Optional[Dict[str, str]] = None
             }
         }
     }
-    res = ES.search(index="songs", body=es_query)
+    res = ES.search(index=es_index, body=es_query)
     return res["hits"]["hits"]
