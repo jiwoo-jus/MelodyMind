@@ -64,7 +64,7 @@ def load_data_from_db() -> pd.DataFrame:
             ar.genres,
             ar.image_url,
             a.name AS album_name,
-            a.release_date,
+            r.release_date,
             sl.spotify_url,
             sl.youtube_music_url,
             sl.apple_music_url
@@ -80,6 +80,8 @@ def load_data_from_db() -> pd.DataFrame:
             tracks t ON s.song_id = t.song_id
         LEFT JOIN
             albums a ON t.album_id = a.album_id
+        LEFT JOIN
+            releases r ON r.album_id = a.album_id
         LEFT JOIN
             melodymind_song_links sl ON s.song_id = sl.song_id;
         """
