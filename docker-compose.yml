@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: melodymind_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports: ["9200:9200"]
+    volumes: ["esdata:/usr/share/elasticsearch/data"]
+
+  fastapi:
+    build: .
+    container_name: melodymind_api
+    env_file: [.env]
+    depends_on: [elasticsearch]
+    ports: ["5051:5051"]
+    volumes:
+      - ./app:/app
+    command:
+      ["/wait-for-elasticsearch.sh", "http://elasticsearch:9200",
+      "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5051", "--reload"]
+
+  data-loader:
+    build: .
+    container_name: melodymind_dataloader
+    env_file: [.env]
+    depends_on: [elasticsearch]
+    volumes:
+      - ./app:/app
+    command:
+      ["/wait-for-elasticsearch.sh", "http://elasticsearch:9200",
+      "python", "scripts/build_songs_index.py"]
+
+volumes:
+  esdata:
