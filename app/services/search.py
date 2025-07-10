@@ -44,6 +44,8 @@ def search(prompt: str, size: int = 20, filters: Optional[Dict[str, str]] = None
 
     filter_clauses = []
     if filters:
+        if song_name := filters.get("song_name"):
+            filter_clauses.append({"match": {"song_name": song_name}})
         if artist := filters.get("artist_name"):
             filter_clauses.append({"match": {"name_artists": artist}})
         if album := filters.get("album_name"):
