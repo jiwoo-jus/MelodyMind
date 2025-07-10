@@ -229,6 +229,16 @@ Once everything is running, test the API:
 
 visit `http://localhost:5051/docs` in your browser to use the Swagger UI.
 
+The `/search` endpoint accepts optional filters in the request body:
+
+- `song_name`
+- `artist_name`
+- `album_name`
+- `song_type`
+- `release_date`
+
+These fields let you narrow results by song details in addition to the text prompt.
+
 
 ## MySQL Tips
 

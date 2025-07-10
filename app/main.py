@@ -57,6 +57,7 @@ app.add_middleware(
 class SearchRequest(BaseModel):
     prompt: str
     size: int = 20
+    song_name: Optional[str] = None
     artist_name: Optional[str] = None
     album_name: Optional[str] = None
     song_type: Optional[str] = None
@@ -87,6 +88,7 @@ def api_search(req: SearchRequest):
     try:
         filters = {
             k: v for k, v in {
+                "song_name": req.song_name,
                 "artist_name": req.artist_name,
                 "album_name": req.album_name,
                 "song_type": req.song_type,
