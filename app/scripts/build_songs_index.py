@@ -48,19 +48,14 @@ def load_data_from_db() -> pd.DataFrame:
         if conn.is_connected():
             print("Successfully connected to the database.")
 
-        # Adjust the JOIN based on how artists are linked.
-        # This query assumes songs.artists contains a JSON-like string with artist IDs
-        # and we take the first artist_id for joining with the artists table.
-        # This part might need significant adjustment based on actual songs.artists structure.
         query = f"""
         SELECT
             s.song_id,
             s.song_name,
             s.artists AS s_artists,
+            m.spotify_url,  
             s.popularity,
             s.song_type,
-            s.album_name,
-            s.release_date,
             l.lyrics,
             e.embedding,
             ar.artist_id,
@@ -75,42 +70,14 @@ def load_data_from_db() -> pd.DataFrame:
             lyrics l ON s.song_id = l.song_id COLLATE utf8mb3_general_ci
         LEFT JOIN
             embeddings e ON s.song_id = e.song_id
+        LEFT JOIN
+            melodymind_song_links m ON s.song_id = m.song_id
         LEFT JOIN 
             artists ar ON ar.artist_id = TRIM(BOTH "'" FROM SUBSTRING_INDEX(SUBSTRING_INDEX(s.artists, "'", 2), "'", -1));
         """
-        # The WHERE e.embedding IS NOT NULL ensures we only get songs with embeddings.
-
         print("Fetching data from database...")
         df = pd.read_sql(query, conn)
         print(f"Loaded {len(df)} songs with embeddings from database.")
-
-        # Process artists_id and artists_name from s_artists
-        # This is a simplified approach; robust parsing is needed if s_artists is complex.
-        def extract_artist_info(s_artists_json_str):
-            try:
-                if pd.isna(s_artists_json_str) or not s_artists_json_str.strip():
-                    return None, None
-                # Attempt to parse as JSON, assuming format like {'id': 'name', ...}
-                artists_dict = json.loads(s_artists_json_str.replace("'", "\""))
-                first_artist_id = next(iter(artists_dict.keys()), None)
-                first_artist_name = artists_dict.get(first_artist_id) if first_artist_id else None
-                return first_artist_id, first_artist_name
-            except (json.JSONDecodeError, TypeError):
-                # Fallback or more sophisticated parsing might be needed
-                # For now, if it's not simple JSON, we might not get these fields correctly
-                # If s.artists was already joined correctly, this part might not be needed
-                return None, None
-
-        # If the JOIN for artists table was successful, artist_id and artist_name are already there.
-        # If not, and you need to parse s.artists:
-        # df[['id_artists_extracted', 'name_artists_extracted']] = df['s_artists'].apply(
-        #     lambda x: pd.Series(extract_artist_info(x))
-        # )
-        # Then decide which artist fields to use. For now, assuming JOIN worked or s_artists is simple.
-        # We will use 'artist_id' and 'artist_name' from the artists table join.
-        # 's_artists' can be dropped if not needed further.
-        # df.drop(columns=['s_artists'], inplace=True, errors='ignore')
-
 
         # Convert JSON string embedding to list
         df['embedding'] = df['embedding'].apply(lambda x: json.loads(x) if x else None)
@@ -139,11 +106,10 @@ def create_index(es: Elasticsearch, index_name: str, dims: int):
             "properties": {
                 "song_id": {"type": "keyword"},
                 "song_name": {"type": "text", "analyzer": "standard"},
+                "spotify_url": {"type": "keyword"},
                 "lyrics": {"type": "text", "analyzer": "standard"},
                 "popularity": {"type": "integer"},
                 "song_type": {"type": "keyword"},
-                "album_name": {"type": "text", "analyzer": "standard"},
-                "release_date": {"type": "date"},
                 # Artist related fields from 'artists' table
                 "artist_id": {"type": "keyword"}, # from artists.artist_id
                 "name_artists": {"type": "text", "analyzer": "standard"}, # from artists.name
@@ -162,6 +128,7 @@ def create_index(es: Elasticsearch, index_name: str, dims: int):
                 # "track_number": {"type": "integer"},
                 # "num_artists": {"type": "integer"},
                 # "num_available_markets": {"type": "integer"},
+                # "release_date": {"type": "date"},
                 # "duration_ms": {"type": "integer"},
                 # "key": {"type": "integer"},
                 # "mode": {"type": "integer"},
@@ -193,36 +160,26 @@ def bulk_load(es: Elasticsearch, index_name: str, df: pd.DataFrame):
             print(f"Skipping song_id {r.song_id} due to missing embedding.")
             continue
 
+        if not r.song_id or pd.isna(r.song_id):
+            print("Skipping row with empty song_id.")
+            continue
         source_doc = {
             "song_id": str(r.song_id),
             "song_name": r.song_name,
             "lyrics": r.lyrics,
             "popularity": None if pd.isna(r.popularity) else int(r.popularity),
             "song_type": r.song_type,
-            "album_name": r.album_name,
-            "release_date": r.release_date,
             "artist_id": r.artist_id, # from artists table
             "name_artists": r.name_artists, # from artists table
             "artist_type": r.artist_type,
             "main_genre": r.main_genre,
             "genres": r.genres,
             "image_url": r.image_url,
+            "spotify_url": r.spotify_url,
             "embedding": r.embedding,
         }
         # Clean NaN/None for text fields to avoid issues with ES
-        for key in [
-            "song_name",
-            "lyrics",
-            "song_type",
-            "album_name",
-            "release_date",
-            "artist_id",
-            "name_artists",
-            "artist_type",
-            "main_genre",
-            "genres",
-            "image_url",
-        ]:
+        for key in ["song_name", "lyrics", "song_type", "artist_id", "name_artists", "artist_type", "main_genre", "genres", "image_url"]:
             if pd.isna(source_doc.get(key)):
                 source_doc[key] = None # Or "" if you prefer empty string
 

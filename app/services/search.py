@@ -36,16 +36,7 @@ def keyword_expand(prompt: str) -> List[str]:
     return [str(k).strip() for k in raw if str(k).strip()]
 
 
-def search(
-    prompt: str,
-    size: int = 20,
-    *,
-    artist: str | None = None,
-    album: str | None = None,
-    song_type: str | None = None,
-    release_from: str | None = None,
-    release_to: str | None = None,
-):
+def search(prompt: str, size: int = 20):
     vec = embed(prompt)
     kws = keyword_expand(prompt)
 
@@ -83,23 +74,5 @@ def search(
             }
         }
     }
-
-    filters = []
-    if artist:
-        filters.append({"term": {"name_artists.keyword": artist}})
-    if album:
-        filters.append({"term": {"album_name.keyword": album}})
-    if song_type:
-        filters.append({"term": {"song_type": song_type}})
-    if release_from or release_to:
-        range_filter = {"range": {"release_date": {}}}
-        if release_from:
-            range_filter["range"]["release_date"]["gte"] = release_from
-        if release_to:
-            range_filter["range"]["release_date"]["lte"] = release_to
-        filters.append(range_filter)
-
-    if filters:
-        es_query["query"]["bool"]["filter"] = filters
     res = ES.search(index="songs", body=es_query)
     return res["hits"]["hits"]
