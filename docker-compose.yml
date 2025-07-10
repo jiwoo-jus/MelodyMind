@@ -25,14 +25,13 @@ services:
 
   data-loader:
     build: .
-    container_name: melodymind_dataloader
     env_file: [.env]
     depends_on: [elasticsearch]
-    volumes:
-      - ./app:/app
     command:
       ["/wait-for-elasticsearch.sh", "http://elasticsearch:9200",
-      "python", "scripts/build_songs_index.py"]
+       "python", "scripts/build_songs_index.py",
+       "--es-url", "http://elasticsearch:9200",
+       "--es-index", "songs"]
 
 volumes:
   esdata:

@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+openai
+elasticsearch>=8.0.0,<9.0.0
+python-dotenv
+pandas
+requests
+pydantic
+mysql-connector-python
+tqdm
+numpy
+tiktoken
+ytmusicapi

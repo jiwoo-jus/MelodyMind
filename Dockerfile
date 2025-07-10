@@ -22,12 +22,8 @@ RUN chmod +x /wait-for-elasticsearch.sh
 RUN apt-get update && apt-get install -y build-essential curl && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-# RUN pip install --no-cache-dir fastapi uvicorn openai "elasticsearch>=8.0.0,<9.0.0" python-dotenv pandas \
-#     mysql-connector-python tqdm requests numpy
-
-# Update the pip install line
-RUN pip install --no-cache-dir fastapi uvicorn openai "elasticsearch>=8.0.0,<9.0.0" python-dotenv pandas \
-    mysql-connector-python sqlalchemy pymysql tqdm requests numpy
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # The CMD here will be overridden by docker-compose
 # CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5051"]
