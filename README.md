@@ -189,7 +189,8 @@ conda activate MelodyMind
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-ELASTICSEARCH_HOST=http://elasticsearch:9200
+# Use localhost when running outside Docker
+ELASTICSEARCH_HOST=http://localhost:9200
 ELASTICSEARCH_INDEX=songs
 PORT=5051
 UVICORN_RELOAD=True

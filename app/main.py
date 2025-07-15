@@ -16,21 +16,27 @@ load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-ES_HOST = os.getenv("ELASTICSEARCH_HOST")
+DEFAULT_ES_HOST = "http://localhost:9200"
+ES_HOST = os.getenv("ELASTICSEARCH_HOST", DEFAULT_ES_HOST)
 ES_INDEX = os.getenv("ELASTICSEARCH_INDEX", "songs")  # Default value retained
 
 def init_es(host: str, retries: int = 5, wait: int = 5) -> Optional[Elasticsearch]:
-    """Initialize Elasticsearch connection with retries."""
-    for attempt in range(retries):
-        try:
-            es = Elasticsearch(host)
-            if es.ping():
-                print(f"[ES] Connected on attempt {attempt + 1}")
-                return es
-        except ESConnectionError:
-            pass
-        print(f"[ES] Retry {attempt + 1}/{retries} to connect to {host}…")
-        time.sleep(wait)
+    """Initialize Elasticsearch connection with retries and a Docker fallback."""
+    hosts_to_try = [host]
+    if host != "http://elasticsearch:9200":
+        hosts_to_try.append("http://elasticsearch:9200")
+
+    for h in hosts_to_try:
+        for attempt in range(retries):
+            try:
+                es = Elasticsearch(h)
+                if es.ping():
+                    print(f"[ES] Connected to {h} on attempt {attempt + 1}")
+                    return es
+            except ESConnectionError:
+                pass
+            print(f"[ES] Retry {attempt + 1}/{retries} to connect to {h}…")
+            time.sleep(wait)
     print("[ES] Failed to connect to Elasticsearch; health ping will be unavailable.")
     return None
 
@@ -70,7 +76,7 @@ class SongResult(BaseModel):
     matched_queries: List[str]
     album_name: Optional[str] = None
     spotify_url: Optional[str] = None
-    youtubemusic_url: Optional[str] = None
+    youtube_music_url: Optional[str] = None
     popularity: Optional[int] = None
     release_date: Optional[str] = None
 
@@ -112,7 +118,7 @@ def api_search(req: SearchRequest):
                 matched_queries=h.get("matched_queries", []),
                 album_name=source.get("album_name"),
                 spotify_url=source.get("spotify_url"),
-                youtubemusic_url=source.get("youtubemusic_url"),
+                youtube_music_url=source.get("youtube_music_url"),
                 popularity=source.get("popularity"),
                 release_date=source.get("release_date"),
             )

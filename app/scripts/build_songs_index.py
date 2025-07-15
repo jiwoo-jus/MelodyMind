@@ -17,7 +17,7 @@ DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME = os.getenv("DB_NAME", "musicoset")
-ES_URL = os.getenv("ELASTICSEARCH_HOST", "http://elasticsearch:9200")
+ES_URL = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
 ES_INDEX = os.getenv("ELASTICSEARCH_INDEX", "songs")
 
 # Fixed model name and embedding dimensions (assuming embeddings were created with this)
@@ -129,7 +129,7 @@ def create_index(es: Elasticsearch, index_name: str, dims: int):
                 "album_name": {"type": "text", "analyzer": "standard"},
                 "release_date": {"type": "date"},
                 "spotify_url": {"type": "keyword"},
-                "youtubemusic_url": {"type": "keyword"},
+                "youtube_music_url": {"type": "keyword"},
                 "embedding": {
                     "type": "dense_vector",
                     "dims": dims,
@@ -189,7 +189,7 @@ def bulk_load(es: Elasticsearch, index_name: str, df: pd.DataFrame):
             "release_date": r.release_date,
             "embedding": r.embedding,
             "spotify_url": r.spotify_url,
-            "youtubemusic_url": r.youtube_music_url,
+            "youtube_music_url": r.youtube_music_url,
         }
         # Clean NaN/None for text fields to avoid issues with ES
         for key in ["song_name", "lyrics", "song_type", "artist_id", "name_artists", "artist_type", "main_genre", "genres", "image_url", "album_name", "release_date"]:
