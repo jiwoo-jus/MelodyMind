@@ -3,7 +3,8 @@ import argparse
 import os
 import pandas as pd
 import tqdm
-from elasticsearch import Elasticsearch, helpers
+from elasticsearch import Elasticsearch, helpers, ConnectionError as ESConnectionError
+import time
 # OpenAI and tiktoken are no longer needed for embedding generation here
 from dotenv import load_dotenv
 import mysql.connector
@@ -32,6 +33,25 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--es-index", default=ES_INDEX, help="Elasticsearch index name")
     # DB connection args can be added if needed, or rely on .env
     return ap.parse_args()
+
+# ─────────────────────────────────────────── ES connection ──
+def init_es(url: str, retries: int = 5, wait: int = 5) -> Elasticsearch:
+    hosts = [url]
+    if url != "http://elasticsearch:9200":
+        hosts.append("http://elasticsearch:9200")
+
+    for h in hosts:
+        for attempt in range(retries):
+            try:
+                es = Elasticsearch(h, request_timeout=120)
+                if es.ping():
+                    print(f"Connected to {h} on attempt {attempt + 1}")
+                    return es
+            except ESConnectionError:
+                pass
+            print(f"Retry {attempt + 1}/{retries} to connect to {h}…")
+            time.sleep(wait)
+    raise SystemExit(f"Failed to connect to Elasticsearch at {hosts}")
 
 # ───────────────────────────────────────────────────────────── data ──
 def load_data_from_db() -> pd.DataFrame:
@@ -225,10 +245,7 @@ def main():
     if not all([DB_USER, DB_PASSWORD, DB_NAME]):
         raise SystemExit("Database credentials (DB_USER, DB_PASSWORD, DB_NAME) are missing. Check your .env file.")
 
-    es = Elasticsearch(args.es_url, request_timeout=120)
-    if not es.ping():
-        raise SystemExit(f"Failed to connect to Elasticsearch at {args.es_url}")
-    print(f"Successfully connected to Elasticsearch at {args.es_url}")
+    es = init_es(args.es_url)
 
 
     print("· Loading data from database")
