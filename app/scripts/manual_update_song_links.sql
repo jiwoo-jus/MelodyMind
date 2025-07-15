@@ -18,7 +18,7 @@
 # 2025-06-11 22:36:57,391 - WARNING - Failed to fetch Spotify link for: Sail On, Sailor by The Beach Boys from 'The Beach Boys Classics...Selected By Brian Wilson' (ID: 4LcJKxxmYF4DPajxfpPT60)
 # 2025-06-11 22:36:57,405 - INFO - Database connecatch: Violet Hill by Col
 
-youtubemusic results:
+YouTube Music results:
 # === PROCESSING COMPLETE ===
 # 2025-06-12 22:32:54,498 - INFO - Total processed: 20406
 # 2025-06-12 22:32:54,498 - INFO - Successful saves: 20405

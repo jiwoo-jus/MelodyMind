@@ -2,12 +2,28 @@ from functools import lru_cache
 from typing import List, Optional, Dict
 import os, json
 
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, ConnectionError as ESConnectionError
 from openai import OpenAI
 
 ES_INDEX = os.getenv("ELASTICSEARCH_INDEX", "songs")
 
-ES = Elasticsearch(os.getenv("ELASTICSEARCH_HOST", "http://elasticsearch:9200"))
+DEFAULT_ES_HOST = "http://localhost:9200"
+
+def init_es() -> Elasticsearch:
+    env_host = os.getenv("ELASTICSEARCH_HOST", DEFAULT_ES_HOST)
+    hosts_to_try = [env_host]
+    if env_host != "http://elasticsearch:9200":
+        hosts_to_try.append("http://elasticsearch:9200")
+    for h in hosts_to_try:
+        try:
+            es = Elasticsearch(h)
+            if es.ping():
+                return es
+        except ESConnectionError:
+            pass
+    raise ESConnectionError(f"Unable to connect to Elasticsearch at {hosts_to_try}")
+
+ES = init_es()
 EMB_MODEL = "text-embedding-3-small"  # 1536-dimensional embedding
 
 CLIENT = OpenAI()
