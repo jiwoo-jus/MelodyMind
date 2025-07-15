@@ -164,6 +164,8 @@ def generate_embeddings(df: pd.DataFrame, client: OpenAI, model: str, batch_size
     enc = tiktoken.encoding_for_model(model)
     embeddings_data = []
 
+    moods = detect_moods_from_lyrics(row["lyrics"])
+
     def clip_text(text: str) -> str:
         tokens = enc.encode(text)
         return enc.decode(tokens[:max_tokens_song])
@@ -249,10 +251,9 @@ def detect_moods_from_lyrics(lyrics: str) -> List[str]:
     except Exception:
         return []
 
-# Add to generate_embeddings function
-def generate_embeddings(df: pd.DataFrame, ...):
+
+#   def generate_embeddings(df: pd.DataFrame, ...):
     # ... existing code ...
-    moods = detect_moods_from_lyrics(row["lyrics"])
     # Store moods in database
 
 
