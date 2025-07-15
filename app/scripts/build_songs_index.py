@@ -63,7 +63,8 @@ def load_data_from_db() -> pd.DataFrame:
             ar.artist_type,
             ar.main_genre,
             ar.genres,
-            ar.image_url
+            ar.image_url,
+            af.energy
         FROM
             songs s
         LEFT JOIN
@@ -73,7 +74,9 @@ def load_data_from_db() -> pd.DataFrame:
         LEFT JOIN
             melodymind_song_links m ON s.song_id = m.song_id
         LEFT JOIN 
-            artists ar ON ar.artist_id = TRIM(BOTH "'" FROM SUBSTRING_INDEX(SUBSTRING_INDEX(s.artists, "'", 2), "'", -1));
+            artists ar ON ar.artist_id = TRIM(BOTH "'" FROM SUBSTRING_INDEX(SUBSTRING_INDEX(s.artists, "'", 2), "'", -1))
+        LEFT JOIN
+            acoustic_features af ON s.song_id = af.song_id;
         """
         print("Fetching data from database...")
         df = pd.read_sql(query, conn)
@@ -122,7 +125,8 @@ def create_index(es: Elasticsearch, index_name: str, dims: int):
                     "dims": dims,
                     "index": True,
                     "similarity": "cosine"
-                }
+                },
+                "energy": {"type": "float"}
                 # Add other fields from your SELECT statement as needed
                 # "explicit": {"type": "boolean"},
                 # "track_number": {"type": "integer"},
@@ -135,7 +139,6 @@ def create_index(es: Elasticsearch, index_name: str, dims: int):
                 # "time_signature": {"type": "integer"},
                 # "acousticness": {"type": "float"},
                 # "danceability": {"type": "float"},
-                # "energy": {"type": "float"},
                 # "instrumentalness": {"type": "float"},
                 # "liveness": {"type": "float"},
                 # "loudness": {"type": "float"},
@@ -177,6 +180,7 @@ def bulk_load(es: Elasticsearch, index_name: str, df: pd.DataFrame):
             "image_url": r.image_url,
             "spotify_url": r.spotify_url,
             "embedding": r.embedding,
+            "energy": None if pd.isna(r.energy) else float(r.energy),
         }
         # Clean NaN/None for text fields to avoid issues with ES
         for key in ["song_name", "lyrics", "song_type", "artist_id", "name_artists", "artist_type", "main_genre", "genres", "image_url"]:

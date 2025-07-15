@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 import os, json
 
 from elasticsearch import Elasticsearch
@@ -36,43 +36,52 @@ def keyword_expand(prompt: str) -> List[str]:
     return [str(k).strip() for k in raw if str(k).strip()]
 
 
-def search(prompt: str, size: int = 20):
+def search(prompt: str, size: int = 20, filters: Optional[List] = None):
     vec = embed(prompt)
     kws = keyword_expand(prompt)
+
+    # Build the main query
+    should_queries = [
+        {
+            "knn": {
+                "field": "embedding",
+                "query_vector": vec,
+                "num_candidates": 100,
+                "_name": "vector_search"
+            }
+        },
+        {
+            "multi_match": {
+                "query": " ".join(kws),
+                "fields": ["song_name^3", "name_artists^2", "lyrics"],
+                "type": "most_fields",
+                "_name": "keyword_search"
+            }
+        },
+        {
+            "multi_match": {
+                "query": prompt,
+                "fields": ["song_name^3", "name_artists^2", "lyrics"],
+                "type": "most_fields",
+                "fuzziness": "AUTO",  # Allows minor typos or variations
+                "_name": "prompt_search"
+            }
+        }
+    ]
+
+    # Build the main bool query
+    bool_query = {"should": should_queries}
+    
+    # Add filters if provided
+    if filters:
+        bool_query["filter"] = filters
 
     es_query = {
         "size": size,
         "query": {
-            "bool": {
-                "should": [
-                    {
-                        "knn": {
-                            "field": "embedding",
-                            "query_vector": vec,
-                            "num_candidates": 100,
-                            "_name": "vector_search"
-                        }
-                    },
-                    {
-                        "multi_match": {
-                            "query": " ".join(kws),
-                            "fields": ["song_name^3", "name_artists^2", "lyrics"],
-                            "type": "most_fields",
-                            "_name": "keyword_search"
-                        }
-                    },
-                    {
-                        "multi_match": {
-                            "query": prompt,
-                            "fields": ["song_name^3", "name_artists^2", "lyrics"],
-                            "type": "most_fields",
-                            "fuzziness": "AUTO",  # Allows minor typos or variations
-                            "_name": "prompt_search"
-                        }
-                    }
-                ]
-            }
+            "bool": bool_query
         }
     }
+    
     res = ES.search(index="songs", body=es_query)
     return res["hits"]["hits"]

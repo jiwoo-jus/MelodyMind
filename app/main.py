@@ -8,10 +8,11 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import uvicorn
 import requests
+import mysql.connector
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from elasticsearch import Elasticsearch, ConnectionError as ESConnectionError
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.responses import RedirectResponse
@@ -24,6 +25,12 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 ES_HOST = os.getenv("ELASTICSEARCH_HOST")
 ES_INDEX = os.getenv("ELASTICSEARCH_INDEX", "songs")  # Default value retained
+
+# MySQL database configuration
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = os.getenv("DB_NAME", "musicoset")
 
 # Spotify credentials
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
@@ -47,6 +54,19 @@ def init_es(host: str, retries: int = 5, wait: int = 5) -> Optional[Elasticsearc
 
 es_client: Optional[Elasticsearch] = init_es(ES_HOST)
 
+def get_db_connection():
+    """Get MySQL database connection."""
+    try:
+        return mysql.connector.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME
+        )
+    except mysql.connector.Error as e:
+        print(f"Error connecting to MySQL: {e}")
+        return None
+
 # ──────────────────────────────────────────── FastAPI app
 app = FastAPI(
     title="MelodyMind API",
@@ -69,6 +89,11 @@ app.add_middleware(
 class SearchRequest(BaseModel):
     prompt: str
     size: int = 20
+    energy_min: Optional[float] = None
+    energy_max: Optional[float] = None
+    artist: Optional[str] = None
+    popularity_min: Optional[int] = None
+    popularity_max: Optional[int] = None
 
 class SongResult(BaseModel):
     title: str
@@ -76,9 +101,12 @@ class SongResult(BaseModel):
     score: float
     matched_queries: List[str]
     spotify_url: Optional[str] = None
-    youtubemusic_url: Optional[str] = None
+    youtube_music_url: Optional[str] = None
     popularity: Optional[int] = None
     release_date: Optional[str] = None
+    energy: Optional[float] = None
+    lyrics: Optional[str] = None
+    reason: Optional[str] = None
 
 # ──────────────────────────────────────────── endpoints
 @app.get("/", summary="Health check")
@@ -92,14 +120,93 @@ def health():
 @app.post("/search", response_model=List[SongResult], summary="Hybrid search")
 def api_search(req: SearchRequest):
     try:
-        hits = hybrid_search(req.prompt, req.size)
+        # Build filter conditions for Elasticsearch
+        filters = []
+        
+        # Energy filter
+        if req.energy_min is not None or req.energy_max is not None:
+            energy_range = {}
+            if req.energy_min is not None:
+                energy_range["gte"] = req.energy_min
+            if req.energy_max is not None:
+                energy_range["lte"] = req.energy_max
+            filters.append({"range": {"energy": energy_range}})
+        
+        # Artist filter
+        if req.artist:
+            filters.append({"match": {"name_artists": req.artist}})
+        
+        # Popularity filter
+        if req.popularity_min is not None or req.popularity_max is not None:
+            popularity_range = {}
+            if req.popularity_min is not None:
+                popularity_range["gte"] = req.popularity_min
+            if req.popularity_max is not None:
+                popularity_range["lte"] = req.popularity_max
+            filters.append({"range": {"popularity": popularity_range}})
+        
+        hits = hybrid_search(req.prompt, req.size, filters)
     except Exception as e:
         print(f"Unhandled exception in hybrid_search: {type(e).__name__} - {e}")
         raise HTTPException(status_code=500, detail=f"Search backend error: {str(e)}")
 
+    # Get additional data from MySQL
+    db_conn = get_db_connection()
+    song_data = {}
+    
+    if db_conn:
+        try:
+            cursor = db_conn.cursor(dictionary=True)
+            song_ids = [h.get("_source", {}).get("song_id") for h in hits if h.get("_source", {}).get("song_id")]
+            
+            if song_ids:
+                # Get release dates from tracks table
+                placeholders = ",".join(["%s"] * len(song_ids))
+                release_query = f"""
+                SELECT song_id, release_date 
+                FROM tracks 
+                WHERE song_id IN ({placeholders})
+                """
+                cursor.execute(release_query, song_ids)
+                release_data = {row["song_id"]: row["release_date"] for row in cursor.fetchall()}
+                
+                # Get YouTube Music URLs from melodymind_song_links table
+                youtube_query = f"""
+                SELECT song_id, youtube_music_url 
+                FROM melodymind_song_links 
+                WHERE song_id IN ({placeholders})
+                """
+                cursor.execute(youtube_query, song_ids)
+                youtube_data = {row["song_id"]: row["youtube_music_url"] for row in cursor.fetchall()}
+                
+                # Get energy from acoustic_features table
+                energy_query = f"""
+                SELECT song_id, energy 
+                FROM acoustic_features 
+                WHERE song_id IN ({placeholders})
+                """
+                cursor.execute(energy_query, song_ids)
+                energy_data = {row["song_id"]: float(row["energy"]) if row["energy"] else None for row in cursor.fetchall()}
+                
+                # Combine all data
+                for song_id in song_ids:
+                    song_data[song_id] = {
+                        "release_date": release_data.get(song_id),
+                        "youtube_music_url": youtube_data.get(song_id),
+                        "energy": energy_data.get(song_id)
+                    }
+            
+            cursor.close()
+        except mysql.connector.Error as e:
+            print(f"Error querying MySQL: {e}")
+        finally:
+            db_conn.close()
+
     results: List[SongResult] = []
     for h in hits:
         source = h.get("_source", {})
+        song_id = source.get("song_id")
+        additional_data = song_data.get(song_id, {})
 
         results.append(
             SongResult(
@@ -108,12 +215,37 @@ def api_search(req: SearchRequest):
                 score=h.get("_score", 0.0),
                 matched_queries=h.get("matched_queries", []),
                 spotify_url=source.get("spotify_url"),
-                youtubemusic_url=source.get("youtubemusic_url"),
+                youtube_music_url=additional_data.get("youtube_music_url") or source.get("youtube_music_url"),
                 popularity=source.get("popularity"),
-                release_date=source.get("release_date"),
+                release_date=additional_data.get("release_date") or source.get("release_date"),
+                energy=additional_data.get("energy") or source.get("energy"),
+                lyrics=source.get("lyrics"),
+                reason=source.get("reason"),
             )
         )
     return results
+
+@app.get("/search", response_model=List[SongResult], summary="Hybrid search via GET")
+def api_search_get(
+    prompt: str = Query(..., description="Search prompt"),
+    size: int = Query(20, description="Number of results to return"),
+    energy_min: Optional[float] = Query(None, description="Minimum energy level"),
+    energy_max: Optional[float] = Query(None, description="Maximum energy level"),
+    artist: Optional[str] = Query(None, description="Artist name filter"),
+    popularity_min: Optional[int] = Query(None, description="Minimum popularity"),
+    popularity_max: Optional[int] = Query(None, description="Maximum popularity")
+):
+    """GET version of the search endpoint with query parameters."""
+    req = SearchRequest(
+        prompt=prompt,
+        size=size,
+        energy_min=energy_min,
+        energy_max=energy_max,
+        artist=artist,
+        popularity_min=popularity_min,
+        popularity_max=popularity_max
+    )
+    return api_search(req)
 
 # ──────────────────────────────────────────── Spotify OAuth callback
 @app.get("/callback", summary="Spotify OAuth callback")
