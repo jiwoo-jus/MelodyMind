@@ -404,7 +404,7 @@ async def create_or_update_playlist(playlist: PlaylistRequest):
                     "INSERT INTO user_playlists (user_id, playlist_name, song_data) VALUES (%s, %s, %s)",
                     (playlist.user_id, playlist.playlist_name, song_data)
                 )
-        # 곡이 없으면 아무 row도 저장하지 않음
+        
 
         conn.commit()
         cursor.close()
