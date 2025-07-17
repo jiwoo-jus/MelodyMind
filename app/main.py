@@ -67,6 +67,54 @@ def get_db_connection():
         print(f"Error connecting to MySQL: {e}")
         return None
 
+def create_tables_if_not_exists():
+    """Create playlist tables if they don't exist."""
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return
+        
+        cursor = conn.cursor()
+        
+        # Create user_playlists table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_playlists (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id VARCHAR(255) NOT NULL,
+                playlist_name VARCHAR(255) NOT NULL,
+                song_data TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_user_id (user_id),
+                INDEX idx_playlist_name (playlist_name),
+                INDEX idx_user_playlist (user_id, playlist_name)
+            )
+        """)
+        
+        # Create users table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id VARCHAR(255) UNIQUE NOT NULL,
+                email VARCHAR(255),
+                display_name VARCHAR(255),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_user_id (user_id)
+            )
+        """)
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        print("✅ Database tables created successfully!")
+        
+    except mysql.connector.Error as e:
+        print(f"❌ Error creating tables: {e}")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
 # ──────────────────────────────────────────── FastAPI app
 app = FastAPI(
     title="MelodyMind API",
@@ -84,6 +132,9 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# Initialize database tables
+create_tables_if_not_exists()
 
 # ──────────────────────────────────────────── pydantic models
 class SearchRequest(BaseModel):
@@ -107,6 +158,15 @@ class SongResult(BaseModel):
     energy: Optional[float] = None
     lyrics: Optional[str] = None
     reason: Optional[str] = None
+
+class PlaylistRequest(BaseModel):
+    user_id: str
+    playlist_name: str
+    songs: List[dict] = []
+
+class PlaylistResponse(BaseModel):
+    message: str
+    playlists: dict = {}
 
 # ──────────────────────────────────────────── endpoints
 @app.get("/", summary="Health check")
@@ -283,9 +343,101 @@ def spotify_callback(request: Request):
 
         return RedirectResponse(url=f"http://127.0.0.1:5500/index.html?token={access_token}")
 
-    except requests.exceptions.RequestException as e:
-        print(f"[ERROR] Token exchange failed: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": "Token exchange failed", "details": str(e)})
+    except requests.RequestException as e:
+        print(f"[ERROR] Spotify API request failed: {e}")
+        return JSONResponse(status_code=500, content={"error": "Failed to exchange code for token", "details": str(e)})
+
+# ──────────────────────────────────────────── Playlist Management APIs
+
+@app.get("/playlists/{user_id}", summary="Get user playlists")
+async def get_user_playlists(user_id: str):
+    """Get all playlists for a specific user."""
+    try:
+        conn = get_db_connection()
+        if not conn:
+            raise HTTPException(status_code=500, detail="Database connection failed")
+        
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM user_playlists WHERE user_id = %s", (user_id,))
+        playlists = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        # Format the response
+        user_playlists = {}
+        for playlist in playlists:
+            playlist_name = playlist['playlist_name']
+            if playlist_name not in user_playlists:
+                user_playlists[playlist_name] = []
+            
+            if playlist['song_data']:
+                import json
+                song_data = json.loads(playlist['song_data'])
+                user_playlists[playlist_name].append(song_data)
+        
+        return {"playlists": user_playlists}
+    
+    except Exception as e:
+        print(f"Error getting playlists: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get playlists")
+
+@app.post("/playlists", summary="Create or update playlist")
+async def create_or_update_playlist(playlist: PlaylistRequest):
+    """Create a new playlist or update an existing one."""
+    try:
+        conn = get_db_connection()
+        if not conn:
+            raise HTTPException(status_code=500, detail="Database connection failed")
+        
+        cursor = conn.cursor()
+        
+        # First, delete existing songs in this playlist
+        cursor.execute("DELETE FROM user_playlists WHERE user_id = %s AND playlist_name = %s", 
+                      (playlist.user_id, playlist.playlist_name))
+
+        import json
+        if playlist.songs:
+            for song in playlist.songs:
+                song_data = json.dumps(song)
+                cursor.execute(
+                    "INSERT INTO user_playlists (user_id, playlist_name, song_data) VALUES (%s, %s, %s)",
+                    (playlist.user_id, playlist.playlist_name, song_data)
+                )
+        # 곡이 없으면 아무 row도 저장하지 않음
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return {"message": "Playlist saved successfully"}
+    except Exception as e:
+        print(f"Error saving playlist: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save playlist")
+
+@app.delete("/playlists/{user_id}/{playlist_name}", summary="Delete playlist")
+async def delete_playlist(user_id: str, playlist_name: str):
+    """Delete a specific playlist."""
+    try:
+        conn = get_db_connection()
+        if not conn:
+            raise HTTPException(status_code=500, detail="Database connection failed")
+        
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM user_playlists WHERE user_id = %s AND playlist_name = %s", 
+                      (user_id, playlist_name))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return {"message": "Playlist deleted successfully"}
+    
+    except Exception as e:
+        print(f"Error deleting playlist: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete playlist")
+
+# ──────────────────────────────────────────── Health check
 
 # ──────────────────────────────────────────── dev runner
 if __name__ == "__main__":
