@@ -1,5 +1,48 @@
 # MelodyMind Project Setup Guide
 
+## **Update: 2025-07-17**
+
+To sync your branch with my latest code, please follow the steps below.
+**Make sure to replace `YOUR_FRONT_BRANCH_NAME` and `YOUR_BACK_BRANCH_NAME`** with your actual branch names.
+
+From the directory where your **frontend** code should be located:
+
+1. `git clone -b Jiwoo https://github.com/cassrose19/frontend.git melodymind-front-0717`
+2. `cd melodymind-front-0717`
+3. `git checkout YOUR_FRONT_BRANCH_NAME`
+4. `git reset --hard Jiwoo`
+5. `git push origin YOUR_FRONT_BRANCH_NAME --force`
+
+From a suitable directory for your **backend** project:
+
+1. `git clone -b Jiwoo https://github.com/jiwoo-jus/MelodyMind.git melodymind-back-0717`
+2. `cd melodymind-back-0717`
+3. `git checkout YOUR_BACK_BRANCH_NAME`
+4. `git reset --hard Jiwoo`
+5. `git push origin YOUR_BACK_BRANCH_NAME --force`
+
+Once you’ve completed these steps, your branch will be fully synced with mine.
+
+---
+
+### To run the project:
+
+1. Open the backend folder in VS Code and add a `.env` file. I'll share the contnets, but **make sure to set your own DB_PASSWORD**.
+2. Open the Docker app and **remove** all items from the **Containers**, **Images**, **Volumes**, and **Builds** tabs.
+3. In the backend root folder, open a terminal and run:
+
+   ```
+   docker-compose up --build
+   ```
+
+   Wait until the build completes successfully.
+4. In the frontend root folder, run:
+
+   ```
+   python -m http.server 8000
+   ```
+5. Open [http://localhost:8000](http://localhost:8000) in Web browser.
+
 ---
 
 ## **Update: Music Links Table Addition (2025-06-11)**
