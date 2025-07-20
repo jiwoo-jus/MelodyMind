@@ -46,3 +46,4 @@ TEMP/
 *.tmp
 *copy*
 *dump*
+*.csv
