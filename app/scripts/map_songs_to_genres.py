@@ -1,6 +1,8 @@
 import pymysql
 import ast
 import csv
+from dotenv import load_dotenv
+load_dotenv()
 from common_genres import COMMON_GENRES
 
 # Connect to database
