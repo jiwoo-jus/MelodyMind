@@ -7,7 +7,7 @@ from common_genres import COMMON_GENRES
 conn = pymysql.connect(
     host='localhost',
     user='root',
-    password='Bday5292000',
+    password=("DB_PASSWORD"),
     database='musicoset'
 )
 cursor = conn.cursor(pymysql.cursors.DictCursor)
