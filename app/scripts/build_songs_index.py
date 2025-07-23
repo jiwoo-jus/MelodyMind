@@ -6,6 +6,7 @@ import tqdm
 from elasticsearch import Elasticsearch, helpers
 # OpenAI and tiktoken are no longer needed for embedding generation here
 from dotenv import load_dotenv
+from common_genres import COMMON_GENRES
 import mysql.connector
 import json # For parsing artists column and loading embedding
 
@@ -17,7 +18,7 @@ DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME = os.getenv("DB_NAME", "musicoset")
-ES_URL = os.getenv("ELASTICSEARCH_HOST", "http://elasticsearch:9200")
+ES_URL = "http://localhost:9200"
 ES_INDEX = os.getenv("ELASTICSEARCH_INDEX", "songs")
 
 # Fixed model name and embedding dimensions (assuming embeddings were created with this)
@@ -34,6 +35,13 @@ def parse_args() -> argparse.Namespace:
     return ap.parse_args()
 
 # ───────────────────────────────────────────────────────────── data ──
+def map_genre(genre_str):  
+    genre_str = genre_str.lower() if isinstance(genre_str, str) else ""
+    for common, keywords in COMMON_GENRES.items():
+        if any(keyword in genre_str for keyword in keywords):
+            return common
+    return "Other"
+
 def load_data_from_db() -> pd.DataFrame:
     """Load song data from MySQL database."""
     conn = None
@@ -81,16 +89,21 @@ def load_data_from_db() -> pd.DataFrame:
         """
         print("Fetching data from database...")
         df = pd.read_sql(query, conn)
+        # debug
+        print("Sample mapped genres:", df["mapped_genre"].dropna().unique()[:10])
         print(f"Loaded {len(df)} songs with embeddings from database.")
 
         # Convert JSON string embedding to list
         df['embedding'] = df['embedding'].apply(lambda x: json.loads(x) if x else None)
+
+        df["mapped_genre"] = df["mapped_genre"].fillna("Other")
 
         return df
 
     except mysql.connector.Error as e:
         print(f"Error connecting to MySQL or executing query: {e}")
         return pd.DataFrame()
+
     finally:
         if conn and conn.is_connected():
             conn.close()
@@ -160,6 +173,7 @@ def create_index(es: Elasticsearch, index_name: str, dims: int):
 def bulk_load(es: Elasticsearch, index_name: str, df: pd.DataFrame):
     """Bulk load data into Elasticsearch."""
     actions = []
+
     for r in df.itertuples(index=False): # index=False to avoid _0, _1 etc. as field names
         if r.embedding is None: # Skip if embedding is missing
             print(f"Skipping song_id {r.song_id} due to missing embedding.")
