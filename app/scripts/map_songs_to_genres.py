@@ -1,4 +1,5 @@
 import pymysql
+import os
 import ast
 import csv
 from dotenv import load_dotenv
@@ -8,9 +9,9 @@ from common_genres import COMMON_GENRES
 # Connect to database
 conn = pymysql.connect(
     host='localhost',
-    user='root',
-    password=("DB_PASSWORD"),
-    database='musicoset'
+    user=os.getenv("DB_USER", "root"),                  
+    password=os.getenv("DB_PASSWORD"),                  
+    database=os.getenv("DB_NAME", "musicoset")
 )
 cursor = conn.cursor(pymysql.cursors.DictCursor)
 
