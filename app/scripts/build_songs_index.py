@@ -52,6 +52,7 @@ def load_data_from_db() -> pd.DataFrame:
         SELECT
             s.song_id,
             s.song_name,
+            s.mapped_genre,
             s.artists AS s_artists,
             m.spotify_url,  
             s.popularity,
@@ -117,6 +118,7 @@ def create_index(es: Elasticsearch, index_name: str, dims: int):
                 "artist_id": {"type": "keyword"}, # from artists.artist_id
                 "name_artists": {"type": "text", "analyzer": "standard"}, # from artists.name
                 "artist_type": {"type": "keyword"},
+                "mapped_genre": {"type": "keyword"},
                 "main_genre": {"type": "keyword"},
                 "genres": {"type": "text"}, # Can be keyword if you don't need partial match on genres string
                 "image_url": {"type": "keyword"},
@@ -175,6 +177,7 @@ def bulk_load(es: Elasticsearch, index_name: str, df: pd.DataFrame):
             "artist_id": r.artist_id, # from artists table
             "name_artists": r.name_artists, # from artists table
             "artist_type": r.artist_type,
+            "mapped_genre": r.mapped_genre,
             "main_genre": r.main_genre,
             "genres": r.genres,
             "image_url": r.image_url,
