@@ -36,7 +36,7 @@ def keyword_expand(prompt: str) -> List[str]:
     return [str(k).strip() for k in raw if str(k).strip()]
 
 
-def search(prompt: str, size: int = 20, filters: Optional[List] = None):
+def search(prompt: str, size: int = 20, filters: Optional[List] = None, genre: Optional[str] = None):
     vec = embed(prompt)
     kws = keyword_expand(prompt)
 
@@ -72,9 +72,18 @@ def search(prompt: str, size: int = 20, filters: Optional[List] = None):
     # Build the main bool query
     bool_query = {"should": should_queries}
     
-    # Add filters if provided
-    if filters:
-        bool_query["filter"] = filters
+    # NEW: Combine existing filters with genre filter
+    filter_clauses = list(filters) if filters else []
+
+    if genre:
+        filter_clauses.append({
+            "term": {
+                "mapped_genre.keyword": genre.lower()
+            }
+        })
+
+    if filter_clauses:
+        bool_query["filter"] = filter_clauses
 
     es_query = {
         "size": size,
@@ -85,3 +94,4 @@ def search(prompt: str, size: int = 20, filters: Optional[List] = None):
     
     res = ES.search(index="songs", body=es_query)
     return res["hits"]["hits"]
+    
