@@ -16,6 +16,7 @@ from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.responses import RedirectResponse
+from fastapi import Body
 load_dotenv()
 
 from services.search import search as hybrid_search
@@ -338,10 +339,16 @@ def spotify_callback(request: Request):
         tokens = response.json()
 
         access_token = tokens.get("access_token")
+        print("Access token:", access_token)
+        # DEBUGGING: Try calling /me immediately
+        me_headers = {"Authorization": f"Bearer {access_token}"}
+        me_res = requests.get("https://api.spotify.com/v1/me", headers=me_headers)
+        print("DEBUG: /me response", me_res.status_code, me_res.text)
+
         if not access_token:
             return JSONResponse(status_code=500, content={"error": "Access token not found", "details": tokens})
 
-        return RedirectResponse(url=f"http://127.0.0.1:5500/index.html?token={access_token}")
+        return RedirectResponse(url=f"http://127.0.0.1:5500/frontend/frontend/index.html?token={access_token}")
 
     except requests.RequestException as e:
         print(f"[ERROR] Spotify API request failed: {e}")
@@ -436,6 +443,64 @@ async def delete_playlist(user_id: str, playlist_name: str):
     except Exception as e:
         print(f"Error deleting playlist: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete playlist")
+
+@app.post("/spotify/create-playlist", summary="Push playlist to user's Spotify")
+def push_playlist_to_spotify(
+    user_id: str = Body(...),
+    playlist_name: str = Body(...),
+    access_token: str = Body(...),
+    songs: List[dict] = Body(...)
+):
+    # Creates playlist on user's Spotify and adds tracks
+    try:
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+        
+        # Get user Spotify ID
+        profile_res = requests.get("https://api.spotify.com/v1/me", headers=headers)
+        profile_res.raise_for_status()
+        spotify_user_id = profile_res.json()["id"]
+        
+        # Create playlist
+        create_res = requests.post(
+            f"https://api.spotify.com/v1/users/{spotify_user_id}/playlists",
+            headers=headers,
+            json={
+                "name": playlist_name,
+                "description": "Created via MelodyMind 🎵",
+                "public": False
+            }
+        )
+        create_res.raise_for_status()
+        playlist_id = create_res.json()["id"]
+        
+        # Search for songs and collect URIs
+        uris = []
+        for song in songs:
+            query = f'track:{song["title"]} artist:{song["artist"]}'
+            search_url = f"https://api.spotify.com/v1/search?q={requests.utils.quote(query)}&type=track&limit=1"
+            search_res = requests.get(search_url, headers=headers)
+            if search_res.ok and search_res.json()["tracks"]["items"]:
+                uri = search_res.json()["tracks"]["items"][0]["uri"]
+                uris.append(uri)
+
+        # Add tracks
+        if uris:
+            add_res = requests.post(
+                f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks",
+                headers=headers,
+                json={"uris": uris}
+            )
+            add_res.raise_for_status()
+        
+        return {"message": "Playlist created on Spotify!", "playlist_id": playlist_id}
+    
+    except Exception as e:
+        print(f"Spotify sync error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+        
 
 # ──────────────────────────────────────────── Health check
 
