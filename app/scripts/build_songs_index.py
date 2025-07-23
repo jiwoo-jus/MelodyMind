@@ -96,7 +96,7 @@ def load_data_from_db() -> pd.DataFrame:
         # Convert JSON string embedding to list
         df['embedding'] = df['embedding'].apply(lambda x: json.loads(x) if x else None)
 
-        df["mapped_genre"] = df["mapped_genre"].fillna("Other")
+        df["mapped_genre"] = df["mapped_genre"].fillna("Other").str.lower()
 
         return df
 
