@@ -209,7 +209,7 @@ def api_search(req: SearchRequest):
 
         # Genre filter
         if req.mapped_genre:
-            filters.append({"term": {"mapped_genre": req.mapped_genre}})
+            filters.append({"term": {"mapped_genre": req.mapped_genre.lower()}})
         
         hits = hybrid_search(req.prompt, req.size, filters)
     except Exception as e:
