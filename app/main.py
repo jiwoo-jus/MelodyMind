@@ -145,7 +145,7 @@ class SearchRequest(BaseModel):
     artist: Optional[str] = None
     popularity_min: Optional[int] = None
     popularity_max: Optional[int] = None
-    genre: Optional[str] = None
+    mapped_genre: Optional[str] = None
 
 class SongResult(BaseModel):
     title: str
@@ -159,7 +159,7 @@ class SongResult(BaseModel):
     energy: Optional[float] = None
     lyrics: Optional[str] = None
     reason: Optional[str] = None
-    genre: Optional[str] = None
+    mapped_genre: Optional[str] = None
 
 class PlaylistRequest(BaseModel):
     user_id: str
@@ -206,6 +206,10 @@ def api_search(req: SearchRequest):
             if req.popularity_max is not None:
                 popularity_range["lte"] = req.popularity_max
             filters.append({"range": {"popularity": popularity_range}})
+
+        # Genre filter
+        if req.mapped_genre:
+            filters.append({"term": {"mapped_genre": req.mapped_genre}})
         
         hits = hybrid_search(req.prompt, req.size, filters)
     except Exception as e:
@@ -283,6 +287,7 @@ def api_search(req: SearchRequest):
                 energy=additional_data.get("energy") or source.get("energy"),
                 lyrics=source.get("lyrics"),
                 reason=source.get("reason"),
+                mapped_genre=source.get("mapped_genre")
             )
         )
     return results
@@ -295,7 +300,8 @@ def api_search_get(
     energy_max: Optional[float] = Query(None, description="Maximum energy level"),
     artist: Optional[str] = Query(None, description="Artist name filter"),
     popularity_min: Optional[int] = Query(None, description="Minimum popularity"),
-    popularity_max: Optional[int] = Query(None, description="Maximum popularity")
+    popularity_max: Optional[int] = Query(None, description="Maximum popularity"),
+    mapped_genre: Optional[str] = Query(None, description="Genre filter")
 ):
     """GET version of the search endpoint with query parameters."""
     req = SearchRequest(
@@ -305,7 +311,8 @@ def api_search_get(
         energy_max=energy_max,
         artist=artist,
         popularity_min=popularity_min,
-        popularity_max=popularity_max
+        popularity_max=popularity_max,
+        mapped_genre=mapped_genre
     )
     return api_search(req)
 
