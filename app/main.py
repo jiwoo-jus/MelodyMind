@@ -145,6 +145,7 @@ class SearchRequest(BaseModel):
     artist: Optional[str] = None
     popularity_min: Optional[int] = None
     popularity_max: Optional[int] = None
+    genre: Optional[str] = None
 
 class SongResult(BaseModel):
     title: str
@@ -158,6 +159,7 @@ class SongResult(BaseModel):
     energy: Optional[float] = None
     lyrics: Optional[str] = None
     reason: Optional[str] = None
+    genre: Optional[str] = None
 
 class PlaylistRequest(BaseModel):
     user_id: str
