@@ -78,7 +78,7 @@ def search(prompt: str, size: int = 20, filters: Optional[List] = None, genre: O
     if genre:
         filter_clauses.append({
             "term": {
-                "mapped_genre.keyword": genre.lower()
+                "mapped_genre": genre.lower()
             }
         })
 
